@@ -29,7 +29,7 @@
 | --- | --- | --- | --- |
 | `app_list` | yes | — | Apps with launcher activities, parsed from `cmd package query-activities`. |
 | `app_launch` | no | `package`, `locale?` | `monkey` to launch; optional `cmd locale set-app-locales`. |
-| `app_terminate` | no | `package`, `kind?` (`force_stop` default / `kill`) | `am force-stop` (default) or `am kill`. Use `kill` to simulate process reclamation while keeping the package eligible for service restart and broadcasts (e.g. `START_STICKY` testing). |
+| `app_terminate` | no | `package`, `kind?` (`force_stop` default / `kill`) | Two modes. `force_stop` → `am force-stop`: hard stop, marks package STOPPED, cancels alarms/jobs, drops queued broadcasts, blocks service auto-restart until next launch — use for clean test teardown. `kill` → `am kill`: soft kill of cached/background process only (no-op in foreground), leaves package state intact so `START_STICKY` services restart, alarms still fire, broadcasts still deliver — use to simulate OS memory reclamation (e.g. `START_STICKY` recovery, JobService re-run). |
 | `app_clear_data` | no (destructive) | `package` | `pm clear`. |
 | `app_get_info` | yes | `package` | Parsed `dumpsys package`: `versionName`, `versionCode`, `targetSdk`, `minSdk`, `firstInstallTime`, `lastUpdateTime`, requested vs granted permissions, signers. |
 | `permission_grant` | no | `package`, `permission` | `pm grant`. |
