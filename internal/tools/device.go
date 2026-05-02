@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/randheer094/velocity-test-mobile/internal/device"
 )
 
 // RegisterDevice registers device discovery & info tools.
@@ -17,7 +19,10 @@ func RegisterDevice(s *mcp.Server, d *Deps) {
 		if err != nil {
 			return errResult(err)
 		}
-		return jsonResult(devs)
+		if devs == nil {
+			devs = []device.Device{}
+		}
+		return jsonResult(map[string]any{"items": devs})
 	})
 
 	mcp.AddTool(s, &mcp.Tool{

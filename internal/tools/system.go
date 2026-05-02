@@ -230,7 +230,10 @@ func registerNotifications(s *mcp.Server, d *Deps) {
 		if err != nil {
 			return errResult(err)
 		}
-		return jsonResult(out)
+		if out == nil {
+			out = []system.Notification{}
+		}
+		return jsonResult(map[string]any{"items": out})
 	})
 
 	type shadeArgs struct {
