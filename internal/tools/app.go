@@ -54,11 +54,23 @@ func RegisterApp(s *mcp.Server, d *Deps) {
 	type terminateArgs struct {
 		DeviceArg
 		Package string `json:"package" jsonschema:"the package to terminate"`
-		Kind    string `json:"kind,omitempty" jsonschema:"force_stop (default) or kill — kill is a soft am-kill that lets START_STICKY services restart and broadcasts continue to deliver"`
+		Kind    string `json:"kind,omitempty" jsonschema:"how to stop the process. force_stop (default) = am force-stop: hard stop, package marked STOPPED, cancels alarms/jobs, drops queued broadcasts, prevents service auto-restart until next user launch. kill = am kill: soft kill of the process only (cached/background processes; no-op if foreground), leaves package state intact so START_STICKY services restart, alarms still fire, and broadcasts still deliver. Use kill to simulate the OS reclaiming memory; use force_stop for a clean test reset."`
 	}
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "app_terminate",
-		Description: "Stop the app under test. `kind=force_stop` (default) issues `am force-stop`. `kind=kill` issues `am kill`, which simulates the OS reclaiming the process while leaving the package eligible for service restart and broadcasts.",
+		Name: "app_terminate",
+		Description: "Stop the app under test. Two modes with materially different semantics:\n\n" +
+			"• `kind=force_stop` (default) — runs `am force-stop <pkg>`. Hard stop: kills every process, " +
+			"cancels pending alarms and JobScheduler jobs, drops queued broadcasts, and marks the package " +
+			"STOPPED so it receives no implicit broadcasts and its services do NOT auto-restart until the " +
+			"user launches it again. Use this for a clean teardown between tests.\n\n" +
+			"• `kind=kill` — runs `am kill <pkg>`. Soft kill: terminates the process only if it is " +
+			"cached/background (no-op while in the foreground), and leaves package state untouched. " +
+			"`START_STICKY` services will be restarted by the system, scheduled alarms still fire, and " +
+			"broadcasts continue to deliver. Use this to simulate the OS reclaiming memory — e.g. to " +
+			"verify `START_STICKY` recovery, `onTaskRemoved` re-creation, or that a JobService re-runs " +
+			"after its process dies.\n\n" +
+			"Pick `kill` when the test is *about* what survives process death; pick `force_stop` when you " +
+			"just need the app gone.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, args terminateArgs) (*mcp.CallToolResult, any, error) {
 		dev, err := d.resolveDevice(ctx, args.Device)
 		if err != nil {
