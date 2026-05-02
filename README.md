@@ -40,6 +40,8 @@ make build                       # static binary
 
 ## Hooking up to a client
 
+### Claude Desktop
+
 ```jsonc
 // ~/Library/Application Support/Claude/claude_desktop_config.json
 {
@@ -51,7 +53,31 @@ make build                       # static binary
 }
 ```
 
-Or interactively:
+### Claude Code
+
+Install the Claude Code CLI:
+
+```bash
+npm install -g @anthropic-ai/claude-code
+```
+
+Then register this server (per-project or globally):
+
+```bash
+# project scope (writes .mcp.json in the current directory)
+claude mcp add android-test /absolute/path/to/velocity-mcp-mobile --scope project
+
+# user scope (available across all projects)
+claude mcp add android-test /absolute/path/to/velocity-mcp-mobile --scope user
+```
+
+Verify the server is connected:
+
+```bash
+claude mcp list
+```
+
+### MCP Inspector
 
 ```bash
 npx @modelcontextprotocol/inspector ./velocity-mcp-mobile
