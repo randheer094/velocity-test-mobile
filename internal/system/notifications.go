@@ -69,14 +69,19 @@ func (c *NotificationClient) List(ctx context.Context, deviceID string, f ListFi
 // parseNotifications walks the dumpsys output block by block. Each
 // notification record begins with `NotificationRecord(...)` and continues
 // until the next NotificationRecord or section break.
+// API 34 (and most Android versions since channels were introduced in API 26)
+// emit the channel id inline in the NotificationRecord header as
+// `Notification(channel=<id> ...)`. Older platform builds also emit a separate
+// `mChannel=NotificationChannel{id=<id>, ...}` line; we accept either.
 var (
-	notifHeaderRE  = regexp.MustCompile(`NotificationRecord\([^)]*pkg=([A-Za-z0-9_.]+).*?\bid=(-?\d+)(?:\s+tag=(\S+))?`)
-	channelLineRE  = regexp.MustCompile(`mChannel=NotificationChannel\{[^}]*?\bid=([^,}\s]+)`)
-	titleLineRE    = regexp.MustCompile(`android\.title=(?:String|CharSequence)\s*\(([^)]*)\)`)
-	textLineRE     = regexp.MustCompile(`android\.text=(?:String|CharSequence)\s*\(([^)]*)\)`)
-	ongoingLineRE  = regexp.MustCompile(`mOngoing=(true|false)`)
-	flagsLineRE    = regexp.MustCompile(`flags=0x([0-9a-fA-F]+)`)
-	postedTimeLine = regexp.MustCompile(`(?:mWhen|when|postTime)=(\d+)`)
+	notifHeaderRE   = regexp.MustCompile(`NotificationRecord\([^)]*pkg=([A-Za-z0-9_.]+).*?\bid=(-?\d+)(?:\s+tag=(\S+))?`)
+	inlineChannelRE = regexp.MustCompile(`\bNotification\(channel=([^\s)]+)`)
+	channelLineRE   = regexp.MustCompile(`mChannel=NotificationChannel\{[^}]*?\bid=([^,}\s]+)`)
+	titleLineRE     = regexp.MustCompile(`android\.title=(?:String|CharSequence)\s*\(([^)]*)\)`)
+	textLineRE      = regexp.MustCompile(`android\.text=(?:String|CharSequence)\s*\(([^)]*)\)`)
+	ongoingLineRE   = regexp.MustCompile(`mOngoing=(true|false)`)
+	flagsLineRE     = regexp.MustCompile(`flags=0x([0-9a-fA-F]+)`)
+	postedTimeLine  = regexp.MustCompile(`(?:mWhen|when|postTime)=(\d+)`)
 )
 
 func parseNotifications(out string) []Notification {
@@ -108,7 +113,9 @@ func parseNotifications(out string) []Notification {
 				n.Tag = ""
 			}
 		}
-		if cm := channelLineRE.FindStringSubmatch(full); cm != nil {
+		if cm := inlineChannelRE.FindStringSubmatch(full); cm != nil {
+			n.Channel = cm[1]
+		} else if cm := channelLineRE.FindStringSubmatch(full); cm != nil {
 			n.Channel = cm[1]
 		}
 		if tm := titleLineRE.FindStringSubmatch(full); tm != nil {

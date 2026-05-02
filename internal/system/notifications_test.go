@@ -27,6 +27,30 @@ Current Notification Manager state:
     mOngoing=false
 `
 
+// dumpsysNotificationsApi34 is captured verbatim from
+// `adb shell dumpsys notification --noredact` on a Pixel emulator running
+// API 34. The format differs from older APIs in two ways the parser must
+// handle: (1) the channel id is embedded inline in the `NotificationRecord(`
+// header as `Notification(channel=<id> ...)` rather than on a separate
+// `mChannel=NotificationChannel{id=...}` line, and (2) the structured
+// channel block uses `effectiveNotificationChannel=NotificationChannel{mId='<id>', ...}`.
+const dumpsysNotificationsApi34 = `
+Current Notification Manager state:
+
+  Notification List:
+    NotificationRecord(0x01a0bcb9: pkg=dev.randheer094.dev.location.debug user=UserHandle{0} id=1 tag=null importance=2 key=0|dev.randheer094.dev.location.debug|1|null|10230: Notification(channel=mock_location_channel shortcut=null contentView=null vibrate=null sound=null defaults=0x0 flags=0x62 color=0x00000000 groupKey=silent vis=SECRET))
+      uid=10230 userId=0
+      flags=0x62
+      pri=-1
+      notification=
+            when=1777723466492
+            extras={
+                android.title=String (Mocking Location)
+                android.text=String (Latitude: 59.3383223, Longitude: 18.0549621)
+            }
+      effectiveNotificationChannel=NotificationChannel{mId='mock_location_channel', mName=Mock Location, mImportance=2}
+`
+
 func TestParseNotifications_OurApp(t *testing.T) {
 	all := parseNotifications(dumpsysNotifications)
 	if len(all) < 2 {
@@ -56,5 +80,28 @@ func TestParseNotifications_OurApp(t *testing.T) {
 	}
 	if our.ID != 42 {
 		t.Errorf("ID = %d", our.ID)
+	}
+}
+
+func TestParseNotifications_Api34InlineChannel(t *testing.T) {
+	all := parseNotifications(dumpsysNotificationsApi34)
+	if len(all) != 1 {
+		t.Fatalf("expected 1 notification, got %d (%+v)", len(all), all)
+	}
+	n := all[0]
+	if n.Package != "dev.randheer094.dev.location.debug" {
+		t.Errorf("Package = %q", n.Package)
+	}
+	if n.Channel != "mock_location_channel" {
+		t.Errorf("Channel = %q (parser must extract from inline `Notification(channel=...)`)", n.Channel)
+	}
+	if n.ID != 1 {
+		t.Errorf("ID = %d", n.ID)
+	}
+	if n.Title != "Mocking Location" {
+		t.Errorf("Title = %q", n.Title)
+	}
+	if !n.Ongoing {
+		t.Errorf("expected Ongoing=true (flags=0x62 has FLAG_ONGOING_EVENT bit)")
 	}
 }
