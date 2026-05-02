@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/adb"
+	"github.com/randheer094/velocity-test-mobile/internal/adb"
 )
 
 // ScreenClient covers wm size, orientation, wake/sleep.

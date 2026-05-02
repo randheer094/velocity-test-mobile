@@ -13,9 +13,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/input"
-	"github.com/randheer094/velocity-mcp-mobile/internal/matcher"
-	"github.com/randheer094/velocity-mcp-mobile/internal/ui"
+	"github.com/randheer094/velocity-test-mobile/internal/input"
+	"github.com/randheer094/velocity-test-mobile/internal/matcher"
+	"github.com/randheer094/velocity-test-mobile/internal/ui"
 )
 
 // Orchestrator wires the layout snapshot source and the input dispatcher

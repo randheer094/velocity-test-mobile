@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/adb"
+	"github.com/randheer094/velocity-test-mobile/internal/adb"
 )
 
 // AppOpMode is the legal value space for `appops set`.

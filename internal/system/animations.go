@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/adb"
+	"github.com/randheer094/velocity-test-mobile/internal/adb"
 )
 
 // AnimationsClient toggles the three global animation scales.

@@ -33,7 +33,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/ui"
+	"github.com/randheer094/velocity-test-mobile/internal/ui"
 )
 
 // Matcher is a JSON-friendly selector for elements in the UI tree.

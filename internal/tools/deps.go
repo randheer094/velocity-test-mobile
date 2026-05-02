@@ -9,15 +9,15 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/adb"
-	"github.com/randheer094/velocity-mcp-mobile/internal/androidcli"
-	"github.com/randheer094/velocity-mcp-mobile/internal/apps"
-	"github.com/randheer094/velocity-mcp-mobile/internal/device"
-	"github.com/randheer094/velocity-mcp-mobile/internal/diagnostics"
-	"github.com/randheer094/velocity-mcp-mobile/internal/input"
-	"github.com/randheer094/velocity-mcp-mobile/internal/system"
-	apptest "github.com/randheer094/velocity-mcp-mobile/internal/testing"
-	"github.com/randheer094/velocity-mcp-mobile/internal/ui"
+	"github.com/randheer094/velocity-test-mobile/internal/adb"
+	"github.com/randheer094/velocity-test-mobile/internal/androidcli"
+	"github.com/randheer094/velocity-test-mobile/internal/apps"
+	"github.com/randheer094/velocity-test-mobile/internal/device"
+	"github.com/randheer094/velocity-test-mobile/internal/diagnostics"
+	"github.com/randheer094/velocity-test-mobile/internal/input"
+	"github.com/randheer094/velocity-test-mobile/internal/system"
+	apptest "github.com/randheer094/velocity-test-mobile/internal/testing"
+	"github.com/randheer094/velocity-test-mobile/internal/ui"
 )
 
 // Deps bundles every shared client used by tool handlers.

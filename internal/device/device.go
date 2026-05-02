@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/adb"
-	"github.com/randheer094/velocity-mcp-mobile/internal/androidcli"
+	"github.com/randheer094/velocity-test-mobile/internal/adb"
+	"github.com/randheer094/velocity-test-mobile/internal/androidcli"
 )
 
 // Device is a minimal view of a connected Android device.

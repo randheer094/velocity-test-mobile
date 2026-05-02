@@ -8,7 +8,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/runner"
+	"github.com/randheer094/velocity-test-mobile/internal/runner"
 )
 
 // Client invokes the adb binary located on PATH.

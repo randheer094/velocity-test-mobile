@@ -6,7 +6,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/adb"
+	"github.com/randheer094/velocity-test-mobile/internal/adb"
 )
 
 // SafeRelPath validates a relative path under an app's data dir. It rejects

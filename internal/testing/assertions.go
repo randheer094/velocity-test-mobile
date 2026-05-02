@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/matcher"
-	"github.com/randheer094/velocity-mcp-mobile/internal/ui"
+	"github.com/randheer094/velocity-test-mobile/internal/matcher"
+	"github.com/randheer094/velocity-test-mobile/internal/ui"
 )
 
 // AssertResult is the structured outcome of every assertion verb.

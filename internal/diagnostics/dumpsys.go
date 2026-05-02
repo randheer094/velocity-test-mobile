@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/adb"
+	"github.com/randheer094/velocity-test-mobile/internal/adb"
 )
 
 // DumpsysClient runs and parses select `dumpsys` outputs.

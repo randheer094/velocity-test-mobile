@@ -5,7 +5,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/diagnostics"
+	"github.com/randheer094/velocity-test-mobile/internal/diagnostics"
 )
 
 // RegisterDiagnostics exposes only the test-debug helpers: logcat tail

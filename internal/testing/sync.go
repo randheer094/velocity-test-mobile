@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/matcher"
-	"github.com/randheer094/velocity-mcp-mobile/internal/ui"
+	"github.com/randheer094/velocity-test-mobile/internal/matcher"
+	"github.com/randheer094/velocity-test-mobile/internal/ui"
 )
 
 // WaitResult is returned by every wait_until_* verb.

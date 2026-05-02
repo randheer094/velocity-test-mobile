@@ -3,7 +3,7 @@ package matcher
 import (
 	"testing"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/ui"
+	"github.com/randheer094/velocity-test-mobile/internal/ui"
 )
 
 func boolPtr(b bool) *bool { return &b }

@@ -6,8 +6,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/androidcli"
-	"github.com/randheer094/velocity-mcp-mobile/internal/ui"
+	"github.com/randheer094/velocity-test-mobile/internal/androidcli"
+	"github.com/randheer094/velocity-test-mobile/internal/ui"
 )
 
 // RegisterUI exposes the screen-snapshot helpers used by tests for visual

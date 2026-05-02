@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/adb"
+	"github.com/randheer094/velocity-test-mobile/internal/adb"
 )
 
 // PackageInfo is a structured subset of `dumpsys package <pkg>`.

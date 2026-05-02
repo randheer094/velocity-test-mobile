@@ -1,4 +1,4 @@
-module github.com/randheer094/velocity-mcp-mobile
+module github.com/randheer094/velocity-test-mobile
 
 go 1.25.0
 

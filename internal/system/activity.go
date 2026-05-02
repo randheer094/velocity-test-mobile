@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/adb"
+	"github.com/randheer094/velocity-test-mobile/internal/adb"
 )
 
 // ActivityClient covers `dumpsys activity` introspection and `am start`
