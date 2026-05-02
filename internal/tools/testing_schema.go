@@ -97,10 +97,16 @@ func schemaDeviceOnly(extras map[string]any, requiredExtras []string) map[string
 	for k, v := range extras {
 		props[k] = v
 	}
-	return map[string]any{
+	schema := map[string]any{
 		"type":                 "object",
 		"properties":           props,
-		"required":             requiredExtras,
 		"additionalProperties": false,
 	}
+	// Only emit `required` when non-empty: a nil []string marshals to JSON
+	// null, which violates JSON Schema (required must be an array) and
+	// makes strict MCP clients reject the whole tools/list response.
+	if len(requiredExtras) > 0 {
+		schema["required"] = requiredExtras
+	}
+	return schema
 }
