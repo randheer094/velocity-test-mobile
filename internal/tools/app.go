@@ -29,7 +29,10 @@ func RegisterApp(s *mcp.Server, d *Deps) {
 		if err != nil {
 			return errResult(err)
 		}
-		return jsonResult(list)
+		if list == nil {
+			list = []apps.App{}
+		}
+		return jsonResult(map[string]any{"items": list})
 	})
 
 	type launchArgs struct {

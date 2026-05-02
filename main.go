@@ -36,7 +36,7 @@ import (
 )
 
 // version is overridable at build time via -ldflags.
-var version = "0.3.0"
+var version = "0.4.0"
 
 func main() {
 	listTools := flag.Bool("list-tools", false, "print the registered tool names and exit")

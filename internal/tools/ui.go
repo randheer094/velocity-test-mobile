@@ -59,7 +59,10 @@ func RegisterUI(s *mcp.Server, d *Deps) {
 			return errResult(err)
 		}
 		flat := ui.Flatten(root)
-		return jsonResult(flat)
+		if flat == nil {
+			flat = []ui.Element{}
+		}
+		return jsonResult(map[string]any{"items": flat})
 	})
 
 	type resolveArgs struct {
