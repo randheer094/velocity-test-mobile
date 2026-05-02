@@ -9,9 +9,10 @@ import (
 	"github.com/randheer094/velocity-mcp-mobile/internal/adb"
 )
 
-// Intent describes the parameters for `am start` / `am broadcast`.
+// Intent describes the parameters for `am start` / `am broadcast` /
+// `am start-service` / `am start-foreground-service`.
 type Intent struct {
-	Mode     string            // "start" (default) or "broadcast"
+	Mode     string            // "start" (default), "broadcast", "service", "foreground_service"
 	Action   string            // -a
 	Category string            // -c
 	Data     string            // -d (URI)
@@ -38,11 +39,21 @@ func (c *Client) SendIntent(ctx context.Context, deviceID string, intent Intent)
 	if mode == "" {
 		mode = "start"
 	}
-	if mode != "start" && mode != "broadcast" {
-		return fmt.Errorf("invalid intent mode %q (expected start or broadcast)", mode)
+	var amVerb string
+	switch mode {
+	case "start":
+		amVerb = "start"
+	case "broadcast":
+		amVerb = "broadcast"
+	case "service":
+		amVerb = "start-service"
+	case "foreground_service":
+		amVerb = "start-foreground-service"
+	default:
+		return fmt.Errorf("invalid intent mode %q (expected start|broadcast|service|foreground_service)", mode)
 	}
 
-	argv := []string{"am", mode}
+	argv := []string{"am", amVerb}
 	if intent.Action != "" {
 		if !actionRE.MatchString(intent.Action) {
 			return fmt.Errorf("invalid action %q", intent.Action)

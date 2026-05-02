@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -52,20 +53,31 @@ func RegisterApp(s *mcp.Server, d *Deps) {
 
 	type terminateArgs struct {
 		DeviceArg
-		Package string `json:"package" jsonschema:"the package to force-stop"`
+		Package string `json:"package" jsonschema:"the package to terminate"`
+		Kind    string `json:"kind,omitempty" jsonschema:"force_stop (default) or kill — kill is a soft am-kill that lets START_STICKY services restart and broadcasts continue to deliver"`
 	}
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "app_terminate",
-		Description: "Force-stop the app under test (test teardown).",
+		Description: "Stop the app under test. `kind=force_stop` (default) issues `am force-stop`. `kind=kill` issues `am kill`, which simulates the OS reclaiming the process while leaving the package eligible for service restart and broadcasts.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, args terminateArgs) (*mcp.CallToolResult, any, error) {
 		dev, err := d.resolveDevice(ctx, args.Device)
 		if err != nil {
 			return errResult(err)
 		}
-		if err := d.Apps.Terminate(ctx, dev, args.Package); err != nil {
-			return errResult(err)
+		switch args.Kind {
+		case "", "force_stop":
+			if err := d.Apps.Terminate(ctx, dev, args.Package); err != nil {
+				return errResult(err)
+			}
+			return textResult("force-stopped " + args.Package)
+		case "kill":
+			if err := d.Apps.Kill(ctx, dev, args.Package); err != nil {
+				return errResult(err)
+			}
+			return textResult("killed " + args.Package)
+		default:
+			return errResult(fmt.Errorf("invalid kind %q (expected force_stop or kill)", args.Kind))
 		}
-		return textResult("terminated " + args.Package)
 	})
 
 	type clearArgs struct {
@@ -141,7 +153,7 @@ func RegisterApp(s *mcp.Server, d *Deps) {
 
 	type intentArgs struct {
 		DeviceArg
-		Mode     string            `json:"mode,omitempty" jsonschema:"start (default) or broadcast"`
+		Mode     string            `json:"mode,omitempty" jsonschema:"start (default), broadcast, service, or foreground_service"`
 		Action   string            `json:"action,omitempty" jsonschema:"intent action, e.g. android.intent.action.VIEW"`
 		Category string            `json:"category,omitempty"`
 		Data     string            `json:"data,omitempty" jsonschema:"URI passed via -d (deep link target)"`
@@ -156,7 +168,7 @@ func RegisterApp(s *mcp.Server, d *Deps) {
 	}
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "intent_send",
-		Description: "Dispatch an Android intent via `am start` / `am broadcast` (deep-link & broadcast tests).",
+		Description: "Dispatch an Android intent via `am start` / `am broadcast` / `am start-service` / `am start-foreground-service`. Use `mode=foreground_service` to start a service that calls `startForeground()` on Android 8+; `mode=service` for plain background services on pre-O or `bindService()`-equivalent flows.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, args intentArgs) (*mcp.CallToolResult, any, error) {
 		dev, err := d.resolveDevice(ctx, args.Device)
 		if err != nil {
@@ -222,5 +234,46 @@ func RegisterApp(s *mcp.Server, d *Deps) {
 			return errResult(err)
 		}
 		return textResult(string(out))
+	})
+
+	type appOpsSetArgs struct {
+		DeviceArg
+		Package string `json:"package"`
+		Op      string `json:"op" jsonschema:"the AppOps op name, e.g. android:mock_location"`
+		Mode    string `json:"mode" jsonschema:"allow | deny | ignore | default"`
+	}
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "appops_set",
+		Description: "Set an AppOps mode on a package via `appops set`. Distinct from runtime permissions — covers system-level grants like `android:mock_location` that `permission_grant` can't reach.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, args appOpsSetArgs) (*mcp.CallToolResult, any, error) {
+		dev, err := d.resolveDevice(ctx, args.Device)
+		if err != nil {
+			return errResult(err)
+		}
+		if err := d.Apps.SetAppOp(ctx, dev, args.Package, args.Op, apps.AppOpMode(args.Mode)); err != nil {
+			return errResult(err)
+		}
+		return textResult("set " + args.Op + "=" + args.Mode + " on " + args.Package)
+	})
+
+	type appOpsGetArgs struct {
+		DeviceArg
+		Package string `json:"package"`
+		Op      string `json:"op" jsonschema:"the AppOps op name, e.g. android:mock_location"`
+	}
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "appops_get",
+		Description: "Read the current AppOps mode for an op on a package. Returns `default` when the op is not explicitly set.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, args appOpsGetArgs) (*mcp.CallToolResult, any, error) {
+		dev, err := d.resolveDevice(ctx, args.Device)
+		if err != nil {
+			return errResult(err)
+		}
+		mode, err := d.Apps.GetAppOp(ctx, dev, args.Package, args.Op)
+		if err != nil {
+			return errResult(err)
+		}
+		return jsonResult(map[string]string{"mode": string(mode)})
 	})
 }

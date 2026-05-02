@@ -128,6 +128,18 @@ func (c *Client) Terminate(ctx context.Context, deviceID, pkg string) error {
 	return err
 }
 
+// Kill soft-kills the package via `am kill`. Unlike Terminate, the package's
+// services may be restarted by the system (relevant for START_STICKY) and
+// future broadcasts are still delivered. Use this to simulate task swipe
+// without the heavier semantics of force-stop.
+func (c *Client) Kill(ctx context.Context, deviceID, pkg string) error {
+	if _, err := adb.MustQuotePackage(pkg); err != nil {
+		return err
+	}
+	_, err := c.Adb.ShellArgv(ctx, deviceID, "am", "kill", pkg)
+	return err
+}
+
 // ClearData wipes a package's user data.
 func (c *Client) ClearData(ctx context.Context, deviceID, pkg string) error {
 	if _, err := adb.MustQuotePackage(pkg); err != nil {

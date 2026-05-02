@@ -29,6 +29,7 @@ func Catalog() []string {
 		// app lifecycle / state / verification
 		"app_list", "app_launch", "app_terminate", "app_clear_data", "app_get_info",
 		"permission_grant", "permission_revoke",
+		"appops_set", "appops_get",
 		"intent_send",
 		"app_data_list", "app_data_read",
 
@@ -43,6 +44,13 @@ func Catalog() []string {
 
 		// system state required by Espresso/Compose tests
 		"animations_set", "animations_get",
+
+		// activity / service / location / notification / shell introspection
+		"activity_get_top", "activity_wait_for_top", "activity_start",
+		"service_get_state", "service_wait_for_state",
+		"location_get_last_known",
+		"notification_list", "notification_shade_set", "notification_tap",
+		"shell_exec",
 
 		// testing — finders / debug
 		"find_node", "find_all_nodes", "count_nodes", "print_tree",

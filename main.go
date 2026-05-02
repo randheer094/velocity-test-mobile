@@ -69,16 +69,21 @@ func main() {
 	}
 
 	deps := &tools.Deps{
-		Adb:        adbClient,
-		AndroidCLI: cli,
-		Resolver:   device.NewResolver(adbClient, cli, 5*time.Second),
-		Apps:       apps.New(adbClient, cli),
-		Layout:     ui.NewLayoutClient(adbClient, cli),
-		Screenshot: ui.NewScreenshotClient(adbClient, cli),
-		Input:      input.New(adbClient),
-		Logs:       diagnostics.NewLogClient(adbClient),
-		Screen:     system.NewScreenClient(adbClient),
-		Animations: system.NewAnimationsClient(adbClient),
+		Adb:           adbClient,
+		AndroidCLI:    cli,
+		Resolver:      device.NewResolver(adbClient, cli, 5*time.Second),
+		Apps:          apps.New(adbClient, cli),
+		Layout:        ui.NewLayoutClient(adbClient, cli),
+		Screenshot:    ui.NewScreenshotClient(adbClient, cli),
+		Input:         input.New(adbClient),
+		Logs:          diagnostics.NewLogClient(adbClient),
+		Screen:        system.NewScreenClient(adbClient),
+		Animations:    system.NewAnimationsClient(adbClient),
+		Activity:      system.NewActivityClient(adbClient),
+		Service:       system.NewServiceClient(adbClient),
+		Location:      system.NewLocationClient(adbClient),
+		Notifications: system.NewNotificationClient(adbClient),
+		Shell:         system.NewShellClient(adbClient),
 	}
 	// Testing surface (Espresso/Compose-style verbs) layers on top of the
 	// existing layout + input clients.
