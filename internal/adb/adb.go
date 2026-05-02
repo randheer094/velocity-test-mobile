@@ -20,14 +20,20 @@ type Client struct {
 // ErrAdbMissing is returned when the adb binary cannot be located.
 var ErrAdbMissing = errors.New("adb not found on PATH; install Android platform-tools and ensure adb is on PATH")
 
-// New locates adb and returns a Client. The binary is resolved once.
+// New locates adb and returns a Client. If adb is not on PATH the Client is
+// still returned (with an empty bin) so the MCP server can start, advertise
+// its tool catalog, and surface a clear per-call error instead of crashing
+// during initialization.
 func New(r *runner.Runner) (*Client, error) {
 	bin, err := exec.LookPath("adb")
 	if err != nil {
-		return nil, ErrAdbMissing
+		return &Client{runner: r}, ErrAdbMissing
 	}
 	return &Client{bin: bin, runner: r}, nil
 }
+
+// Available reports whether adb was located on PATH at construction time.
+func (c *Client) Available() bool { return c.bin != "" }
 
 // Bin returns the resolved adb path; useful for diagnostics.
 func (c *Client) Bin() string { return c.bin }
@@ -44,6 +50,9 @@ func (c *Client) baseArgs(deviceID string, args ...string) []string {
 
 // Run executes `adb [-s deviceID] args...` and returns captured output.
 func (c *Client) Run(ctx context.Context, deviceID string, args ...string) (runner.Result, error) {
+	if c.bin == "" {
+		return runner.Result{}, ErrAdbMissing
+	}
 	return c.runner.Run(ctx, runner.Cmd{Bin: c.bin, Args: c.baseArgs(deviceID, args...)})
 }
 
@@ -63,6 +72,9 @@ func (c *Client) ShellArgv(ctx context.Context, deviceID string, argv ...string)
 // ExecOut runs `adb exec-out <argv...>` returning raw bytes (binary mode).
 // Used for `screencap -p`, `uiautomator dump /dev/tty`.
 func (c *Client) ExecOut(ctx context.Context, deviceID string, argv ...string) ([]byte, error) {
+	if c.bin == "" {
+		return nil, ErrAdbMissing
+	}
 	args := append([]string{"exec-out"}, argv...)
 	res, err := c.runner.Run(ctx, runner.Cmd{
 		Bin:      c.bin,
@@ -77,6 +89,9 @@ func (c *Client) ExecOut(ctx context.Context, deviceID string, argv ...string) (
 
 // Stream starts an adb command and returns a handle for the caller to manage.
 func (c *Client) Stream(ctx context.Context, deviceID string, args ...string) (*runner.StreamHandle, error) {
+	if c.bin == "" {
+		return nil, ErrAdbMissing
+	}
 	return c.runner.Stream(ctx, runner.Cmd{Bin: c.bin, Args: c.baseArgs(deviceID, args...)})
 }
 
