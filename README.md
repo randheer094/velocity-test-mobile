@@ -147,6 +147,10 @@ See [`docs/MATCHERS.md`](docs/MATCHERS.md) for the field-by-field reference and 
 
 Full reference in [`docs/TOOLS.md`](docs/TOOLS.md).
 
+## Security
+
+The `shell_exec` tool forwards arbitrary commands verbatim to `adb shell` on the connected device. Anyone who can reach this MCP server (locally, over a forwarded socket, or via a misconfigured client) can execute shell commands on every device that's currently `adb`-attached. Treat the server like an open `adb shell` and only run it on hosts and connections you trust.
+
 ## Caveats vs. the real frameworks (in-process bits we can't externally implement)
 
 | Capability | Behaviour here |
