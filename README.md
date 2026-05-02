@@ -77,6 +77,30 @@ Verify the server is connected:
 claude mcp list
 ```
 
+### Gemini CLI
+
+Install the Gemini CLI:
+
+```bash
+npm install -g @google/gemini-cli
+```
+
+Then register this server (project or user scope):
+
+```bash
+# project scope (writes .gemini/settings.json in the current directory)
+gemini mcp add velocity-test-mobile /absolute/path/to/velocity-test-mobile --scope project
+
+# user scope (writes ~/.gemini/settings.json, available across all projects)
+gemini mcp add velocity-test-mobile /absolute/path/to/velocity-test-mobile --scope user
+```
+
+Verify the server is connected:
+
+```bash
+gemini mcp list
+```
+
 ### MCP Inspector
 
 ```bash
