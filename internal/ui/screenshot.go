@@ -12,8 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/adb"
-	"github.com/randheer094/velocity-mcp-mobile/internal/androidcli"
+	"github.com/randheer094/velocity-test-mobile/internal/adb"
+	"github.com/randheer094/velocity-test-mobile/internal/androidcli"
 )
 
 // ScreenshotClient takes screenshots from a connected device.

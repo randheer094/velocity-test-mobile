@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/adb"
-	"github.com/randheer094/velocity-mcp-mobile/internal/androidcli"
+	"github.com/randheer094/velocity-test-mobile/internal/adb"
+	"github.com/randheer094/velocity-test-mobile/internal/androidcli"
 )
 
 // Bounds is the rectangle occupied by an Element on screen.

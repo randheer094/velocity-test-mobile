@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/adb"
+	"github.com/randheer094/velocity-test-mobile/internal/adb"
 )
 
 // LogClient handles logcat tailing & clearing.

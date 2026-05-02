@@ -7,9 +7,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/matcher"
-	"github.com/randheer094/velocity-mcp-mobile/internal/testing"
-	"github.com/randheer094/velocity-mcp-mobile/internal/ui"
+	"github.com/randheer094/velocity-test-mobile/internal/matcher"
+	"github.com/randheer094/velocity-test-mobile/internal/testing"
+	"github.com/randheer094/velocity-test-mobile/internal/ui"
 )
 
 // matcherEnvelope holds the device + matcher + arbitrary extras parsed

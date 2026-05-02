@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/adb"
+	"github.com/randheer094/velocity-test-mobile/internal/adb"
 )
 
 var permRE = regexp.MustCompile(`^[A-Za-z0-9_.]+$`)

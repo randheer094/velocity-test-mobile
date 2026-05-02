@@ -1,4 +1,4 @@
-BINARY     := velocity-mcp-mobile
+BINARY     := velocity-test-mobile
 PKG        := ./...
 INSTALL_DIR ?= $(HOME)/.local/bin
 

@@ -1,6 +1,6 @@
 # Architecture
 
-`velocity-mcp-mobile` is an Android **testing** MCP server. An LLM agent connects via stdio and calls Espresso-/Compose-test-style verbs against a connected device or emulator.
+`velocity-test-mobile` is an Android **testing** MCP server. An LLM agent connects via stdio and calls Espresso-/Compose-test-style verbs against a connected device or emulator.
 
 ```
         ┌──────────────────────────────────────────────────────────────────┐
@@ -9,7 +9,7 @@
                                     │ JSON-RPC over stdio
                                     ▼
         ┌──────────────────────────────────────────────────────────────────┐
-        │ velocity-mcp-mobile (Go binary, ~7 MB)                          │
+        │ velocity-test-mobile (Go binary, ~7 MB)                          │
         │                                                                  │
         │   internal/tools           ← MCP tool definitions / schemas      │
         │      ├── testing.go        ← matcher-bearing verbs (Server.AddTool, hand-built JSON Schema with $ref recursion)

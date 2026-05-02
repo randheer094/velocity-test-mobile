@@ -6,7 +6,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/adb"
+	"github.com/randheer094/velocity-test-mobile/internal/adb"
 )
 
 // RegisterInput exposes only the test-supporting input verbs that don't

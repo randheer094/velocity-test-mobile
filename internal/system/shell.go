@@ -5,8 +5,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/adb"
-	"github.com/randheer094/velocity-mcp-mobile/internal/runner"
+	"github.com/randheer094/velocity-test-mobile/internal/adb"
+	"github.com/randheer094/velocity-test-mobile/internal/runner"
 )
 
 // ShellClient wraps `adb shell` for the explicit `shell_exec` MCP tool.

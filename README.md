@@ -1,4 +1,4 @@
-# velocity-mcp-mobile
+# velocity-test-mobile
 
 An **Android testing** [Model Context Protocol](https://modelcontextprotocol.io) server, written in Go.
 
@@ -31,11 +31,11 @@ If `android` is missing the server logs one warning and the affected tools fall 
 ## Install
 
 ```bash
-git clone https://github.com/randheer094/velocity-mcp-mobile.git
-cd velocity-mcp-mobile
+git clone https://github.com/randheer094/velocity-test-mobile.git
+cd velocity-test-mobile
 make build                       # static binary
-./velocity-mcp-mobile --version
-./velocity-mcp-mobile --list-tools | wc -l   # 104
+./velocity-test-mobile --version
+./velocity-test-mobile --list-tools | wc -l   # 104
 ```
 
 ## Hooking up to a client
@@ -46,8 +46,8 @@ make build                       # static binary
 // ~/Library/Application Support/Claude/claude_desktop_config.json
 {
   "mcpServers": {
-    "android-test": {
-      "command": "/absolute/path/to/velocity-mcp-mobile"
+    "velocity-test-mobile": {
+      "command": "/absolute/path/to/velocity-test-mobile"
     }
   }
 }
@@ -65,10 +65,10 @@ Then register this server (per-project or globally):
 
 ```bash
 # project scope (writes .mcp.json in the current directory)
-claude mcp add android-test /absolute/path/to/velocity-mcp-mobile --scope project
+claude mcp add velocity-test-mobile /absolute/path/to/velocity-test-mobile --scope project
 
 # user scope (available across all projects)
-claude mcp add android-test /absolute/path/to/velocity-mcp-mobile --scope user
+claude mcp add velocity-test-mobile /absolute/path/to/velocity-test-mobile --scope user
 ```
 
 Verify the server is connected:
@@ -80,7 +80,7 @@ claude mcp list
 ### MCP Inspector
 
 ```bash
-npx @modelcontextprotocol/inspector ./velocity-mcp-mobile
+npx @modelcontextprotocol/inspector ./velocity-test-mobile
 ```
 
 ## The matcher in 30 seconds

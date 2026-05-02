@@ -6,7 +6,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/apps"
+	"github.com/randheer094/velocity-test-mobile/internal/apps"
 )
 
 // RegisterApp exposes test setup/teardown and verification verbs over apps:

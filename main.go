@@ -1,4 +1,4 @@
-// Command velocity-mcp-mobile is an Android **testing** MCP server.
+// Command velocity-test-mobile is an Android **testing** MCP server.
 //
 // It exposes Espresso- and Compose-test-style verbs to an LLM agent, plus
 // the minimum supporting infrastructure tests need (animation control,
@@ -22,17 +22,17 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/adb"
-	"github.com/randheer094/velocity-mcp-mobile/internal/androidcli"
-	"github.com/randheer094/velocity-mcp-mobile/internal/apps"
-	"github.com/randheer094/velocity-mcp-mobile/internal/device"
-	"github.com/randheer094/velocity-mcp-mobile/internal/diagnostics"
-	"github.com/randheer094/velocity-mcp-mobile/internal/input"
-	"github.com/randheer094/velocity-mcp-mobile/internal/runner"
-	"github.com/randheer094/velocity-mcp-mobile/internal/system"
-	apptest "github.com/randheer094/velocity-mcp-mobile/internal/testing"
-	"github.com/randheer094/velocity-mcp-mobile/internal/tools"
-	"github.com/randheer094/velocity-mcp-mobile/internal/ui"
+	"github.com/randheer094/velocity-test-mobile/internal/adb"
+	"github.com/randheer094/velocity-test-mobile/internal/androidcli"
+	"github.com/randheer094/velocity-test-mobile/internal/apps"
+	"github.com/randheer094/velocity-test-mobile/internal/device"
+	"github.com/randheer094/velocity-test-mobile/internal/diagnostics"
+	"github.com/randheer094/velocity-test-mobile/internal/input"
+	"github.com/randheer094/velocity-test-mobile/internal/runner"
+	"github.com/randheer094/velocity-test-mobile/internal/system"
+	apptest "github.com/randheer094/velocity-test-mobile/internal/testing"
+	"github.com/randheer094/velocity-test-mobile/internal/tools"
+	"github.com/randheer094/velocity-test-mobile/internal/ui"
 )
 
 // version is overridable at build time via -ldflags.
@@ -44,7 +44,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Println("velocity-mcp-mobile", version)
+		fmt.Println("velocity-test-mobile", version)
 		return
 	}
 	if *listTools {
@@ -91,7 +91,7 @@ func main() {
 	deps.Intents = apptest.NewIntentRecorder(deps.Logs)
 
 	server := mcp.NewServer(&mcp.Implementation{
-		Name:    "android-test-mcp",
+		Name:    "velocity-test-mobile",
 		Title:   "Android Testing MCP Server",
 		Version: version,
 	}, nil)

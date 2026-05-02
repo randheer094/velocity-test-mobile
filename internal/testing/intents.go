@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/diagnostics"
+	"github.com/randheer094/velocity-test-mobile/internal/diagnostics"
 )
 
 // IntentRecorder approximates Espresso-Intents — but only the *recording*

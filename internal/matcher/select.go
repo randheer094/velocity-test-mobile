@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/ui"
+	"github.com/randheer094/velocity-test-mobile/internal/ui"
 )
 
 // ErrEmptyMatcher is returned when a tool is called with no selection criteria.

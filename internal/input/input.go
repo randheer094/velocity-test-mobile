@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/adb"
+	"github.com/randheer094/velocity-test-mobile/internal/adb"
 )
 
 // Direction is one of "up", "down", "left", "right".

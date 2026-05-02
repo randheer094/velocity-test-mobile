@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/input"
-	"github.com/randheer094/velocity-mcp-mobile/internal/matcher"
-	"github.com/randheer094/velocity-mcp-mobile/internal/ui"
+	"github.com/randheer094/velocity-test-mobile/internal/input"
+	"github.com/randheer094/velocity-test-mobile/internal/matcher"
+	"github.com/randheer094/velocity-test-mobile/internal/ui"
 )
 
 // ActionResult is returned by every action verb so the LLM agent sees what

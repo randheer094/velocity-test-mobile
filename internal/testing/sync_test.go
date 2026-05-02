@@ -3,7 +3,7 @@ package testing
 import (
 	"testing"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/ui"
+	"github.com/randheer094/velocity-test-mobile/internal/ui"
 )
 
 func TestHashTree_Stable(t *testing.T) {

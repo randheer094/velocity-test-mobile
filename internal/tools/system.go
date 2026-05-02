@@ -8,8 +8,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/matcher"
-	"github.com/randheer094/velocity-mcp-mobile/internal/system"
+	"github.com/randheer094/velocity-test-mobile/internal/matcher"
+	"github.com/randheer094/velocity-test-mobile/internal/system"
 )
 
 // RegisterSystem exposes the device-state knobs that real Espresso/Compose

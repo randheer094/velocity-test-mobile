@@ -12,7 +12,7 @@ import (
 	"errors"
 	"os/exec"
 
-	"github.com/randheer094/velocity-mcp-mobile/internal/runner"
+	"github.com/randheer094/velocity-test-mobile/internal/runner"
 )
 
 // ErrNotInstalled is returned by capability-gated calls when the `android`
