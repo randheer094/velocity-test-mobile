@@ -111,10 +111,13 @@ func (o *Orchestrator) ClearText(ctx context.Context, deviceID string, m *matche
 	return ActionResult{OK: true, Element: &elem, X: x, Y: y}, nil
 }
 
-// clearTextField focuses the element then issues KEYCODE_MOVE_END (123)
-// to put the cursor at the end, then KEYCODE_DEL (67) repeatedly to wipe.
-// We use Ctrl+A + DEL via shell `input keycombination` if supported, else
-// fall back to repeated DEL using the existing text length.
+// clearTextField focuses the matched field and wipes its text.
+//
+// Strategy:
+//  1. If the field isn't focused, tap its centre and wait briefly.
+//  2. Try CTRL+A (select-all) + DEL via `input keycombination` (API 31+).
+//  3. Fall back to MOVE_END followed by repeated DEL — sized by the
+//     current text length plus a margin.
 func (o *Orchestrator) clearTextField(ctx context.Context, deviceID string, m *matcher.Matcher) error {
 	elem, _, err := o.fetchAndFind(ctx, deviceID, m)
 	if err != nil {
@@ -131,14 +134,23 @@ func (o *Orchestrator) clearTextField(ctx context.Context, deviceID string, m *m
 		case <-time.After(150 * time.Millisecond):
 		}
 	}
-	// Move cursor to end then delete `len(text)` characters. This is the
-	// most portable approach across keyboards / IMEs.
-	current := elem.Text
-	if err := o.Input.PressButton(ctx, deviceID, "DPAD_RIGHT"); err != nil {
-		// non-fatal
-		_ = err
+
+	// Preferred path: CTRL+A then DEL — single keystroke clear, regardless of length.
+	if err := o.Input.PressKeyCombination(ctx, deviceID, "CTRL_LEFT", "A"); err == nil {
+		if err := o.Input.PressButton(ctx, deviceID, "DEL"); err == nil {
+			return nil
+		}
 	}
-	for i := 0; i < len([]rune(current))+1; i++ {
+
+	// Fallback: jump to end of line then issue DEL once per existing rune,
+	// plus a small margin in case more text is in the field than was
+	// captured by the accessibility snapshot.
+	_ = o.Input.PressButton(ctx, deviceID, "MOVE_END")
+	count := len([]rune(elem.Text)) + 4
+	if count > 256 {
+		count = 256 // cap to keep latency bounded on huge fields
+	}
+	for i := 0; i < count; i++ {
 		if err := o.Input.PressButton(ctx, deviceID, "DEL"); err != nil {
 			return err
 		}
@@ -170,6 +182,11 @@ func (o *Orchestrator) Submit(ctx context.Context, deviceID string, m *matcher.M
 }
 
 // SwipeNode — Espresso swipeUp/Down/Left/Right when bound to a specific view.
+//
+// The swipe is centred on the matched element and sized to one third of the
+// node's relevant dimension (with a 50px floor). We pass 0 for screenW/H
+// to Input.Swipe so the upper clamp is disabled — the real screen bounds
+// will be enforced by Android's input system itself.
 func (o *Orchestrator) SwipeNode(ctx context.Context, deviceID string, m *matcher.Matcher, direction string, durationMs int) (ActionResult, error) {
 	elem, _, err := o.fetchAndFind(ctx, deviceID, m)
 	if err != nil {
@@ -187,7 +204,7 @@ func (o *Orchestrator) SwipeNode(ctx context.Context, deviceID string, m *matche
 		dist = 50
 	}
 	if err := o.Input.Swipe(ctx, deviceID, input.Direction(direction),
-		elem.Bounds.X+elem.Bounds.Width, elem.Bounds.Y+elem.Bounds.Height, x, y, dist, durationMs); err != nil {
+		0, 0, x, y, dist, durationMs); err != nil {
 		return ActionResult{Element: &elem, X: x, Y: y, Reason: err.Error()}, err
 	}
 	return ActionResult{OK: true, Element: &elem, X: x, Y: y}, nil
@@ -195,15 +212,24 @@ func (o *Orchestrator) SwipeNode(ctx context.Context, deviceID string, m *matche
 
 // ScrollOptions controls the ScrollTo behaviour.
 type ScrollOptions struct {
-	MaxAttempts int    // total swipes to attempt (default 12)
-	Direction   string // "auto" | "up" | "down" | "left" | "right"
+	MaxAttempts int              // total swipes to attempt (default 12)
+	Direction   string           // "auto" | "up" | "down" | "left" | "right"
+	Container   *matcher.Matcher // if non-empty, restrict the scroll to a specific scrollable
 }
 
 // ScrollTo — Espresso scrollTo() / Compose performScrollToNode.
-// Locates a scrollable ancestor and swipes within it until either the target
-// matcher is visible or MaxAttempts is exhausted. When Direction is "auto"
-// we swipe up first (move content up to reveal items below); after half the
-// attempts we switch to swipe-down to also probe upward.
+//
+// Locates a scrollable ancestor and swipes within it until either the
+// target matcher is visible or MaxAttempts is exhausted.
+//
+// Container selection:
+//   - If opts.Container is supplied and resolves to a scrollable node, use that.
+//   - Otherwise pick the largest visible scrollable on screen.
+//
+// Direction:
+//   - "auto" (default): swipe up for the first half of the attempts, then
+//     swipe down for the remainder so we probe both directions.
+//   - "up"/"down"/"left"/"right": swipe in that direction every attempt.
 func (o *Orchestrator) ScrollTo(ctx context.Context, deviceID string, m *matcher.Matcher, opts ScrollOptions) (ActionResult, error) {
 	if opts.MaxAttempts <= 0 {
 		opts.MaxAttempts = 12
@@ -230,10 +256,9 @@ func (o *Orchestrator) ScrollTo(ctx context.Context, deviceID string, m *matcher
 		if attempt == opts.MaxAttempts {
 			break
 		}
-		// Find the scrollable container, default to the largest visible scrollable.
-		scrollable, ok := largestScrollable(root)
+		scrollable, ok := chooseScrollable(root, opts.Container)
 		if !ok {
-			return ActionResult{Reason: "no scrollable ancestor found"}, fmt.Errorf("no scrollable container on screen")
+			return ActionResult{Reason: "no scrollable container found"}, fmt.Errorf("no scrollable container on screen")
 		}
 		dir := opts.Direction
 		if dir == "auto" {
@@ -256,6 +281,28 @@ func (o *Orchestrator) ScrollTo(ctx context.Context, deviceID string, m *matcher
 	return ActionResult{Reason: "target never appeared on screen"}, errors.New("scroll_to: target not reachable within attempt budget")
 }
 
+// chooseScrollable returns the requested container (if a non-empty matcher
+// is supplied and resolves to a scrollable node) or the largest visible
+// scrollable on screen.
+func chooseScrollable(root ui.Element, container *matcher.Matcher) (ui.Element, bool) {
+	if container != nil && !container.IsEmpty() {
+		all, err := matcher.FindAll(root, container)
+		if err == nil {
+			for _, e := range all {
+				if e.Scrollable && matcher.IsDisplayed(e) {
+					return e, true
+				}
+			}
+		}
+		return ui.Element{}, false
+	}
+	return largestScrollable(root)
+}
+
+// swipeWithin dispatches a swipe centred on the container's bounds, sized
+// to one third of the relevant dimension. screenW/H are passed as 0 so the
+// upper clamp in Input.Swipe is disabled — the system's real screen bounds
+// take over.
 func (o *Orchestrator) swipeWithin(ctx context.Context, deviceID string, container ui.Element, direction string) error {
 	w := container.Bounds.Width
 	h := container.Bounds.Height
@@ -268,7 +315,7 @@ func (o *Orchestrator) swipeWithin(ctx context.Context, deviceID string, contain
 	if dist < 50 {
 		dist = 50
 	}
-	return o.Input.Swipe(ctx, deviceID, input.Direction(direction), w, h, cx, cy, dist, 200)
+	return o.Input.Swipe(ctx, deviceID, input.Direction(direction), 0, 0, cx, cy, dist, 200)
 }
 
 func largestScrollable(root ui.Element) (ui.Element, bool) {
@@ -297,14 +344,19 @@ func (o *Orchestrator) SlowSwipeNode(ctx context.Context, deviceID string, m *ma
 	return o.SwipeNode(ctx, deviceID, m, direction, 1500)
 }
 
-// ScrollToIndex — Compose performScrollToIndex(idx). Locates the matched
-// scrollable container and swipes within it `index` times in the natural
-// scroll direction (down for vertical, right for horizontal). This is a
-// pragmatic external approximation since LazyColumn/Row indexing is opaque
-// from outside the app.
-func (o *Orchestrator) ScrollToIndex(ctx context.Context, deviceID string, container *matcher.Matcher, index int) (ActionResult, error) {
+// ScrollToIndex — Compose performScrollToIndex(idx).
+//
+// LazyColumn/Row item indexing is opaque from outside the app, so this is
+// an approximation: the matched scrollable container is swiped `index`
+// times in `direction`. direction defaults to "up" (which scrolls the
+// content upward, revealing later items in a vertical list); pass
+// "down"/"left"/"right" to override.
+func (o *Orchestrator) ScrollToIndex(ctx context.Context, deviceID string, container *matcher.Matcher, index int, direction string) (ActionResult, error) {
 	if index < 0 {
 		return ActionResult{Reason: "index must be non-negative"}, fmt.Errorf("index out of range")
+	}
+	if direction == "" {
+		direction = "up"
 	}
 	elem, _, err := o.fetchAndFind(ctx, deviceID, container)
 	if err != nil {
@@ -314,7 +366,7 @@ func (o *Orchestrator) ScrollToIndex(ctx context.Context, deviceID string, conta
 		return ActionResult{Element: &elem, Reason: "matched element is not scrollable"}, fmt.Errorf("not scrollable")
 	}
 	for i := 0; i < index; i++ {
-		if err := o.swipeWithin(ctx, deviceID, elem, "up"); err != nil {
+		if err := o.swipeWithin(ctx, deviceID, elem, direction); err != nil {
 			return ActionResult{Element: &elem, Reason: err.Error()}, err
 		}
 		select {
@@ -327,10 +379,12 @@ func (o *Orchestrator) ScrollToIndex(ctx context.Context, deviceID string, conta
 	return ActionResult{OK: true, Element: &elem, X: x, Y: y}, nil
 }
 
-// PerformKeyPress — Compose performKeyPress(key, meta). Currently supports
-// only a key name; modifier keys (Ctrl/Shift/Alt) are not portably available
-// via `adb shell input keyevent` without per-OEM `input keycombination`
-// support. Modifier flags are accepted but logged as best-effort.
+// PerformKeyPress — Compose performKeyPress(key, meta).
+//
+// Modifier keys (ctrl/shift/alt) are dispatched via `input keycombination`
+// when the device supports it (Android 12+). On older devices we fall back
+// to a plain `input keyevent` for the key alone and surface a Reason
+// describing the missing modifier coverage.
 func (o *Orchestrator) PerformKeyPress(ctx context.Context, deviceID string, m *matcher.Matcher, key string, ctrl, shift, alt bool) (ActionResult, error) {
 	if m != nil && !m.IsEmpty() {
 		elem, _, err := o.fetchAndFind(ctx, deviceID, m)
@@ -349,12 +403,33 @@ func (o *Orchestrator) PerformKeyPress(ctx context.Context, deviceID string, m *
 			}
 		}
 	}
-	if err := o.Input.PressButton(ctx, deviceID, key); err != nil {
-		return ActionResult{Reason: err.Error()}, err
+	if !(ctrl || shift || alt) {
+		if err := o.Input.PressButton(ctx, deviceID, key); err != nil {
+			return ActionResult{Reason: err.Error()}, err
+		}
+		return ActionResult{OK: true}, nil
 	}
-	_ = ctrl
-	_ = shift
-	_ = alt
+	// Build the modifier chord.
+	chord := []string{}
+	if ctrl {
+		chord = append(chord, "CTRL_LEFT")
+	}
+	if shift {
+		chord = append(chord, "SHIFT_LEFT")
+	}
+	if alt {
+		chord = append(chord, "ALT_LEFT")
+	}
+	chord = append(chord, key)
+	if err := o.Input.PressKeyCombination(ctx, deviceID, chord...); err != nil {
+		// Fallback: dispatch the key on its own and report the missing
+		// modifier coverage so the agent can decide whether to retry.
+		_ = o.Input.PressButton(ctx, deviceID, key)
+		return ActionResult{
+			OK:     true,
+			Reason: fmt.Sprintf("modifier chord unsupported (%v); pressed %q without modifiers", err, key),
+		}, nil
+	}
 	return ActionResult{OK: true}, nil
 }
 

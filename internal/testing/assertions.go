@@ -2,6 +2,7 @@ package testing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -17,12 +18,13 @@ type AssertResult struct {
 	Matched int         `json:"matched"`
 }
 
-// assertWith runs check on the matched element. When the matcher returns
-// ErrNotFound, ok is automatically false with a helpful reason.
+// assertWith runs check on the matched element. When the matcher reports
+// "no element matched", that is a regular assertion failure (OK=false);
+// any other error (adb failure, malformed regex, …) is propagated.
 func (o *Orchestrator) assertWith(ctx context.Context, deviceID string, m *matcher.Matcher, check func(ui.Element) (bool, string)) (AssertResult, error) {
 	elem, all, err := o.fetchAndFind(ctx, deviceID, m)
 	if err != nil {
-		if errIsNotFound(err) {
+		if errors.Is(err, matcher.ErrNotFound) {
 			return AssertResult{OK: false, Reason: "no element matched"}, nil
 		}
 		return AssertResult{}, err
@@ -31,10 +33,8 @@ func (o *Orchestrator) assertWith(ctx context.Context, deviceID string, m *match
 	return AssertResult{OK: ok, Element: &elem, Matched: len(all), Reason: reason}, nil
 }
 
-func errIsNotFound(err error) bool {
-	return err == matcher.ErrNotFound || (err != nil && err.Error() != "" &&
-		(err == matcher.ErrNotFound || strings.HasPrefix(err.Error(), matcher.ErrNotFound.Error())))
-}
+// suppress unused-import warning when strings is only conditionally referenced.
+var _ = strings.Contains
 
 // AssertVisible — Espresso isDisplayed / Compose assertIsDisplayed.
 func (o *Orchestrator) AssertVisible(ctx context.Context, deviceID string, m *matcher.Matcher) (AssertResult, error) {

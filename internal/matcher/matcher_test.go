@@ -232,6 +232,65 @@ func TestOnOffToggleable(t *testing.T) {
 	}
 }
 
+func TestDuplicateSiblings_HasSiblingCorrectness(t *testing.T) {
+	// Three siblings with IDENTICAL text/bounds/class. The buggy indexOf
+	// would consider all three as the "same" node and miscount siblings.
+	root := ui.Element{
+		Class: "FrameLayout", Enabled: true, VisibleToUser: true,
+		Bounds: ui.Bounds{Width: 1000, Height: 1000},
+		Children: []ui.Element{
+			{Class: "Container", Enabled: true, VisibleToUser: true, Bounds: ui.Bounds{Width: 100, Height: 100}, Children: []ui.Element{
+				{Class: "Item", Text: "X", Enabled: true, VisibleToUser: true, Bounds: ui.Bounds{Width: 10, Height: 10}},
+				{Class: "Item", Text: "X", Enabled: true, VisibleToUser: true, Bounds: ui.Bounds{Width: 10, Height: 10}},
+				{Class: "Item", Text: "X", Enabled: true, VisibleToUser: true, Bounds: ui.Bounds{Width: 10, Height: 10}},
+			}},
+		},
+	}
+	// Every "X" has a sibling that is also an "X". HasSibling should
+	// match all 3 (each has the OTHER two as siblings).
+	got, err := FindAll(root, &Matcher{Text: "X", HasSibling: &Matcher{Text: "X"}})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("HasSibling matched %d, want 3", len(got))
+	}
+
+	// HasDescendant on the Container should match given any "X" descendant exists.
+	got, err = FindAll(root, &Matcher{ClassName: "Container", HasDescendant: &Matcher{Text: "X"}})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("Container.HasDescendant: %d, want 1", len(got))
+	}
+}
+
+func TestParentIndex_DuplicateSiblings(t *testing.T) {
+	root := ui.Element{
+		Class: "FrameLayout", Enabled: true, VisibleToUser: true,
+		Bounds: ui.Bounds{Width: 1000, Height: 1000},
+		Children: []ui.Element{
+			{Class: "Container", Enabled: true, VisibleToUser: true, Bounds: ui.Bounds{Width: 100, Height: 100}, Children: []ui.Element{
+				{Class: "Item", Text: "X", Enabled: true, VisibleToUser: true, Bounds: ui.Bounds{Width: 10, Height: 10}},
+				{Class: "Item", Text: "X", Enabled: true, VisibleToUser: true, Bounds: ui.Bounds{Width: 10, Height: 10}},
+				{Class: "Item", Text: "X", Enabled: true, VisibleToUser: true, Bounds: ui.Bounds{Width: 10, Height: 10}},
+			}},
+		},
+	}
+	zero, one, two := 0, 1, 2
+	// Each Item must be findable by its position despite identical content.
+	for _, idx := range []*int{&zero, &one, &two} {
+		got, err := FindAll(root, &Matcher{ClassName: "Item", ParentIndex: idx})
+		if err != nil {
+			t.Fatalf("err for idx=%v: %v", *idx, err)
+		}
+		if len(got) != 1 {
+			t.Fatalf("ParentIndex=%d matched %d items, want 1", *idx, len(got))
+		}
+	}
+}
+
 func TestInstance(t *testing.T) {
 	root := tree()
 	first, err := Find(root, &Matcher{ResourceID: "item"})

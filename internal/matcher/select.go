@@ -22,13 +22,13 @@ func FindAll(root ui.Element, m *Matcher) ([]ui.Element, error) {
 	}
 	flat := flattenWithParents(root)
 	var matches []ui.Element
-	for _, item := range flat {
-		ok, err := matchAtPath(item, flat, m)
+	for i := range flat {
+		ok, err := matchAtIndex(i, flat, m)
 		if err != nil {
 			return nil, err
 		}
 		if ok {
-			matches = append(matches, item.elem)
+			matches = append(matches, flat[i].elem)
 		}
 	}
 	return matches, nil
@@ -59,13 +59,12 @@ func Count(root ui.Element, m *Matcher) (int, error) {
 	return len(matches), nil
 }
 
-// pathItem holds a node together with its ancestry chain so combinators
-// can be evaluated cheaply.
+// pathItem holds a node together with its position in the flattened tree.
+// `parent` is the flat index of the immediate parent, -1 for the root.
 type pathItem struct {
-	elem       ui.Element
-	parent     int // index in flat slice; -1 for root
-	depth      int
-	siblingsOf int // index of nearest ancestor that has multiple direct children including this branch
+	elem   ui.Element
+	parent int
+	depth  int
 }
 
 func flattenWithParents(root ui.Element) []pathItem {
@@ -82,7 +81,17 @@ func flattenWithParents(root ui.Element) []pathItem {
 	return out
 }
 
-func matchAtPath(item pathItem, flat []pathItem, m *Matcher) (bool, error) {
+// matchAtIndex evaluates m against the node at flat[idx]. It is the
+// canonical entry point for tree-aware predicates: every combinator that
+// recurses (HasAncestor, HasDescendant, HasParent, HasSibling) ultimately
+// calls back into matchAtIndex with the candidate's flat index.
+//
+// Carrying the index (rather than re-deriving it from the element's content)
+// makes correctness independent of duplicate sibling content — two nodes
+// with identical text/bounds/class are still distinct paths.
+func matchAtIndex(idx int, flat []pathItem, m *Matcher) (bool, error) {
+	item := flat[idx]
+
 	// Local predicates first.
 	ok, err := Match(item.elem, m)
 	if err != nil || !ok {
@@ -101,18 +110,19 @@ func matchAtPath(item pathItem, flat []pathItem, m *Matcher) (bool, error) {
 			return false, nil
 		}
 		// Position among the parent's direct children.
-		idx := -1
+		pos := -1
 		count := 0
 		for i, other := range flat {
-			if other.parent == item.parent {
-				if i == indexOf(item, flat) {
-					idx = count
-					break
-				}
-				count++
+			if other.parent != item.parent {
+				continue
 			}
+			if i == idx {
+				pos = count
+				break
+			}
+			count++
 		}
-		if idx != *m.ParentIndex {
+		if pos != *m.ParentIndex {
 			return false, nil
 		}
 	}
@@ -151,7 +161,7 @@ func matchAtPath(item pathItem, flat []pathItem, m *Matcher) (bool, error) {
 		if item.parent < 0 {
 			return false, nil
 		}
-		ok, err := matchAtPath(flat[item.parent], flat, m.HasParent)
+		ok, err := matchAtIndex(item.parent, flat, m.HasParent)
 		if err != nil || !ok {
 			return ok, err
 		}
@@ -160,7 +170,7 @@ func matchAtPath(item pathItem, flat []pathItem, m *Matcher) (bool, error) {
 	if m.HasAncestor != nil {
 		matched := false
 		for p := item.parent; p >= 0; p = flat[p].parent {
-			ok, err := matchAtPath(flat[p], flat, m.HasAncestor)
+			ok, err := matchAtIndex(p, flat, m.HasAncestor)
 			if err != nil {
 				return false, err
 			}
@@ -177,13 +187,10 @@ func matchAtPath(item pathItem, flat []pathItem, m *Matcher) (bool, error) {
 	if m.HasDescendant != nil {
 		matched := false
 		for i := range flat {
-			if i == indexOf(item, flat) {
+			if i == idx || !isDescendantOf(flat, i, idx) {
 				continue
 			}
-			if !isDescendantOf(flat, i, indexOf(item, flat)) {
-				continue
-			}
-			ok, err := matchAtPath(flat[i], flat, m.HasDescendant)
+			ok, err := matchAtIndex(i, flat, m.HasDescendant)
 			if err != nil {
 				return false, err
 			}
@@ -202,12 +209,11 @@ func matchAtPath(item pathItem, flat []pathItem, m *Matcher) (bool, error) {
 			return false, nil
 		}
 		matched := false
-		myIdx := indexOf(item, flat)
 		for i, other := range flat {
-			if i == myIdx || other.parent != item.parent {
+			if i == idx || other.parent != item.parent {
 				continue
 			}
-			ok, err := matchAtPath(other, flat, m.HasSibling)
+			ok, err := matchAtIndex(i, flat, m.HasSibling)
 			if err != nil {
 				return false, err
 			}
@@ -222,21 +228,6 @@ func matchAtPath(item pathItem, flat []pathItem, m *Matcher) (bool, error) {
 	}
 
 	return true, nil
-}
-
-func indexOf(item pathItem, flat []pathItem) int {
-	// Stable: the slice is built once per Find call; pointer-style identity
-	// isn't available so we fall back to "the first item with this depth and
-	// parent and matching elem header". Good enough — flatten preserves order.
-	for i, it := range flat {
-		if it.depth == item.depth && it.parent == item.parent &&
-			it.elem.Bounds == item.elem.Bounds &&
-			it.elem.Class == item.elem.Class &&
-			it.elem.Text == item.elem.Text {
-			return i
-		}
-	}
-	return -1
 }
 
 func isDescendantOf(flat []pathItem, i, ancestor int) bool {

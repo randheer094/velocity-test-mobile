@@ -55,6 +55,12 @@ func TestKeycode(t *testing.T) {
 		"home":          3,
 		"KEYCODE_ENTER": 66,
 		"  power  ":     26,
+		"A":             29,
+		"z":             54,
+		"0":             7,
+		"9":             16,
+		"MOVE_END":      123,
+		"CTRL_LEFT":     113,
 	}
 	for in, want := range cases {
 		got, err := Keycode(in)
@@ -68,5 +74,8 @@ func TestKeycode(t *testing.T) {
 	}
 	if _, err := Keycode("BANANA"); err == nil {
 		t.Error("expected error for unknown key")
+	}
+	if _, err := Keycode("AB"); err == nil {
+		t.Error("expected error for two-letter sequence")
 	}
 }

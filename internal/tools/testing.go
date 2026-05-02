@@ -544,21 +544,25 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 		})
 
 	addMatcherTool("scroll_to_index",
-		"Scroll within the matched scrollable container by `index` swipes (Compose performScrollToIndex). External approximation: LazyColumn/Row item indexing is opaque from outside the app, so this dispatches `index` page-sized swipes inside the container.",
+		"Scroll within the matched scrollable container by `index` swipes (Compose performScrollToIndex). External approximation: LazyColumn/Row item indexing is opaque from outside the app, so this dispatches `index` page-sized swipes in `direction` (default \"up\", which scrolls the content upward).",
 		false,
-		map[string]any{"index": map[string]any{"type": "integer", "minimum": 0}},
+		map[string]any{
+			"index":     map[string]any{"type": "integer", "minimum": 0},
+			"direction": map[string]any{"type": "string", "enum": []string{"up", "down", "left", "right"}, "description": "default \"up\""},
+		},
 		[]string{"index"},
 		func(ctx context.Context, dev string, m *matcher.Matcher, raw json.RawMessage) (any, error) {
 			var x struct {
-				Index int `json:"index"`
+				Index     int    `json:"index"`
+				Direction string `json:"direction"`
 			}
 			_ = json.Unmarshal(raw, &x)
-			res, _ := o.ScrollToIndex(ctx, dev, m, x.Index)
+			res, _ := o.ScrollToIndex(ctx, dev, m, x.Index, x.Direction)
 			return res, nil
 		})
 
 	addMatcherTool("perform_key_press",
-		"Press a key, optionally focusing the matched element first (Compose performKeyPress). Modifier flags (ctrl/shift/alt) are accepted but only honored on devices whose `input keycombination` supports them.",
+		"Press a key, optionally focusing the matched element first (Compose performKeyPress). Modifier flags ctrl/shift/alt dispatch via `input keycombination` (Android 12+); on older devices the key is sent without modifiers and the result reports the missing coverage.",
 		false,
 		map[string]any{
 			"key":   map[string]any{"type": "string", "description": "key name; e.g. ENTER, BACK, TAB, DPAD_DOWN"},
@@ -577,23 +581,48 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 			return res, nil
 		})
 
-	addMatcherTool("scroll_to",
-		"Scroll a scrollable ancestor until the matched element is visible (Espresso scrollTo / Compose performScrollToNode).",
-		false,
-		map[string]any{
-			"maxAttempts": map[string]any{"type": "integer", "minimum": 1, "description": "total swipes to attempt (default 12)"},
-			"direction":   map[string]any{"type": "string", "enum": []string{"auto", "up", "down", "left", "right"}, "description": "default auto"},
+	// scroll_to allows passing an optional `container` matcher; that requires
+	// a custom schema (extras can't carry a $ref-typed matcher cleanly).
+	s.AddTool(&mcp.Tool{
+		Name:        "scroll_to",
+		Description: "Scroll a scrollable ancestor until the matched element is visible (Espresso scrollTo / Compose performScrollToNode). Pass `container` to restrict the scroll to a specific scrollable; otherwise the largest visible scrollable on screen is used.",
+		InputSchema: map[string]any{
+			"type": "object",
+			"$defs": map[string]any{
+				"matcher": matcherSchemaDef,
+			},
+			"properties": map[string]any{
+				"device":      deviceProp,
+				"match":       map[string]any{"$ref": "#/$defs/matcher"},
+				"container":   map[string]any{"$ref": "#/$defs/matcher"},
+				"maxAttempts": map[string]any{"type": "integer", "minimum": 1, "description": "total swipes to attempt (default 12)"},
+				"direction":   map[string]any{"type": "string", "enum": []string{"auto", "up", "down", "left", "right"}, "description": "default \"auto\""},
+			},
+			"required":             []string{"match"},
+			"additionalProperties": false,
 		},
-		nil,
-		func(ctx context.Context, dev string, m *matcher.Matcher, raw json.RawMessage) (any, error) {
-			var x struct {
-				MaxAttempts int    `json:"maxAttempts"`
-				Direction   string `json:"direction"`
-			}
-			_ = json.Unmarshal(raw, &x)
-			res, _ := o.ScrollTo(ctx, dev, m, testing.ScrollOptions{MaxAttempts: x.MaxAttempts, Direction: x.Direction})
-			return res, nil
+	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		var args struct {
+			Device      string           `json:"device"`
+			Match       matcher.Matcher  `json:"match"`
+			Container   *matcher.Matcher `json:"container,omitempty"`
+			MaxAttempts int              `json:"maxAttempts"`
+			Direction   string           `json:"direction"`
+		}
+		if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
+			return errResultDirect(err), nil
+		}
+		dev, err := d.resolveDevice(ctx, args.Device)
+		if err != nil {
+			return errResultDirect(err), nil
+		}
+		res, _ := o.ScrollTo(ctx, dev, &args.Match, testing.ScrollOptions{
+			MaxAttempts: args.MaxAttempts,
+			Direction:   args.Direction,
+			Container:   args.Container,
 		})
+		return jsonResultDirect(res), nil
+	})
 
 	addMatcherTool("perform_ime_action",
 		"Press ENTER on the matched (or currently focused) field (Espresso pressImeActionButton).",

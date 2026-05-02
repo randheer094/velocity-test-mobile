@@ -131,6 +131,23 @@ func (c *Client) PressButton(ctx context.Context, deviceID, name string) error {
 	return err
 }
 
+// PressKeyCombination dispatches `input keycombination` for chord presses
+// (e.g. CTRL+A). Falls back to a clear error if the device is too old.
+func (c *Client) PressKeyCombination(ctx context.Context, deviceID string, names ...string) error {
+	if len(names) < 2 {
+		return fmt.Errorf("keycombination requires at least two keys, got %d", len(names))
+	}
+	codes := make([]int, 0, len(names))
+	for _, n := range names {
+		code, err := adb.Keycode(n)
+		if err != nil {
+			return err
+		}
+		codes = append(codes, code)
+	}
+	return c.Adb.KeyCombination(ctx, deviceID, codes...)
+}
+
 // TypeKeys enters text into the focused field. ASCII bytes go through
 // `input text`; non-ASCII text is base64-encoded into the device clipboard
 // and pasted via KEYCODE_PASTE.

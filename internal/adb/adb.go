@@ -80,6 +80,29 @@ func (c *Client) Stream(ctx context.Context, deviceID string, args ...string) (*
 	return c.runner.Stream(ctx, runner.Cmd{Bin: c.bin, Args: c.baseArgs(deviceID, args...)})
 }
 
+// KeyCombination dispatches `input keycombination <code1> <code2> [...]`,
+// available on API 31+. On older devices it returns an error so callers
+// can fall back to issuing keys individually.
+func (c *Client) KeyCombination(ctx context.Context, deviceID string, codes ...int) error {
+	if len(codes) < 2 {
+		return errors.New("keycombination requires at least two keycodes")
+	}
+	args := []string{"input", "keycombination"}
+	for _, code := range codes {
+		args = append(args, fmt.Sprintf("%d", code))
+	}
+	res, err := c.ShellArgv(ctx, deviceID, args...)
+	if err != nil {
+		return err
+	}
+	combined := string(res.Stdout) + string(res.Stderr)
+	if strings.Contains(strings.ToLower(combined), "unknown command") ||
+		strings.Contains(strings.ToLower(combined), "error: invalid") {
+		return errors.New("device does not support `input keycombination` (Android < 12)")
+	}
+	return nil
+}
+
 // QuoteForShell wraps a string in single quotes for safe inclusion in an
 // `adb shell <command>` invocation. Internal single quotes are escaped.
 func QuoteForShell(s string) string {
