@@ -61,7 +61,10 @@ func main() {
 	r := runner.New(30*time.Second, 0)
 	adbClient, err := adb.New(r)
 	if err != nil {
-		log.Fatalf("startup: %v", err)
+		// Don't fail startup: connect to the MCP client and advertise the
+		// tool catalog so the user can see what's available. Tool calls
+		// will return ErrAdbMissing until adb is installed.
+		log.Printf("warning: %v — server will start but tool calls will fail until adb is installed", err)
 	}
 	cli := androidcli.New(r) // optional
 	if !cli.Available() {
