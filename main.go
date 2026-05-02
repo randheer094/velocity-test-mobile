@@ -1,10 +1,13 @@
-// Command velocity-mcp-mobile is an Android-only Model Context Protocol
-// server. It runs over stdio and exposes ~50 tools for end-to-end Android
-// app verification & testing on devices and emulators.
+// Command velocity-mcp-mobile is an Android **testing** MCP server.
+//
+// It exposes Espresso- and Compose-test-style verbs to an LLM agent, plus
+// the minimum supporting infrastructure tests need (animation control,
+// permissions, app launch/clear, screenshot/diff, layout, logcat).
 //
 // Runtime requirements (must be on PATH):
 //   - adb (always)
-//   - android (Google's agent CLI; recommended — many tools fall back to adb when it is missing)
+//   - android (Google's agent CLI; recommended — improves screen_resolve
+//     and screen_layout when present, gracefully falls back to adb otherwise)
 package main
 
 import (
@@ -24,9 +27,7 @@ import (
 	"github.com/randheer094/velocity-mcp-mobile/internal/apps"
 	"github.com/randheer094/velocity-mcp-mobile/internal/device"
 	"github.com/randheer094/velocity-mcp-mobile/internal/diagnostics"
-	"github.com/randheer094/velocity-mcp-mobile/internal/files"
 	"github.com/randheer094/velocity-mcp-mobile/internal/input"
-	"github.com/randheer094/velocity-mcp-mobile/internal/maintenance"
 	"github.com/randheer094/velocity-mcp-mobile/internal/runner"
 	"github.com/randheer094/velocity-mcp-mobile/internal/system"
 	apptest "github.com/randheer094/velocity-mcp-mobile/internal/testing"
@@ -35,7 +36,7 @@ import (
 )
 
 // version is overridable at build time via -ldflags.
-var version = "0.1.0"
+var version = "0.3.0"
 
 func main() {
 	listTools := flag.Bool("list-tools", false, "print the registered tool names and exit")
@@ -62,40 +63,31 @@ func main() {
 	if err != nil {
 		log.Fatalf("startup: %v", err)
 	}
-	cli := androidcli.New(r) // OK if absent
+	cli := androidcli.New(r) // optional
 	if !cli.Available() {
-		log.Printf("`android` agent CLI not found — some tools (emulator_*, screen_resolve, docs_*) will be unavailable. Install: https://developer.android.com/tools/agents/android-cli")
+		log.Printf("`android` agent CLI not found — `screen_resolve` will be unavailable and `screen_layout`/`find_*` will use UIAutomator instead. Install: https://developer.android.com/tools/agents/android-cli")
 	}
 
 	deps := &tools.Deps{
-		Adb:         adbClient,
-		AndroidCLI:  cli,
-		Resolver:    device.NewResolver(adbClient, cli, 5*time.Second),
-		Apps:        apps.New(adbClient, cli),
-		Layout:      ui.NewLayoutClient(adbClient, cli),
-		Screenshot:  ui.NewScreenshotClient(adbClient, cli),
-		Recorder:    ui.NewRecorder(adbClient),
-		Input:       input.New(adbClient),
-		Logs:        diagnostics.NewLogClient(adbClient),
-		Dumpsys:     diagnostics.NewDumpsysClient(adbClient),
-		Trace:       diagnostics.NewTraceClient(adbClient),
-		Files:       files.New(adbClient),
-		Screen:      system.NewScreenClient(adbClient),
-		Animations:  system.NewAnimationsClient(adbClient),
-		Doze:        system.NewDozeClient(adbClient),
-		Time:        system.NewTimeClient(adbClient),
-		Network:     system.NewNetworkClient(adbClient),
-		Location:    system.NewLocationClient(adbClient),
-		Maintenance: maintenance.New(adbClient),
+		Adb:        adbClient,
+		AndroidCLI: cli,
+		Resolver:   device.NewResolver(adbClient, cli, 5*time.Second),
+		Apps:       apps.New(adbClient, cli),
+		Layout:     ui.NewLayoutClient(adbClient, cli),
+		Screenshot: ui.NewScreenshotClient(adbClient, cli),
+		Input:      input.New(adbClient),
+		Logs:       diagnostics.NewLogClient(adbClient),
+		Screen:     system.NewScreenClient(adbClient),
+		Animations: system.NewAnimationsClient(adbClient),
 	}
-	// Testing surface (Espresso/Compose-style verbs) is layered on top of
-	// the existing layout + input clients.
+	// Testing surface (Espresso/Compose-style verbs) layers on top of the
+	// existing layout + input clients.
 	deps.Tester = apptest.New(deps.Layout, deps.Input)
 	deps.Intents = apptest.NewIntentRecorder(deps.Logs)
 
 	server := mcp.NewServer(&mcp.Implementation{
-		Name:    "android-mcp",
-		Title:   "Android MCP Server",
+		Name:    "android-test-mcp",
+		Title:   "Android Testing MCP Server",
 		Version: version,
 	}, nil)
 	tools.RegisterAll(server, deps)
@@ -103,16 +95,11 @@ func main() {
 	rootCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Graceful shutdown: SIGINT / SIGTERM cancels root context and stops any
-	// active screen recordings cleanly.
 	sigC := make(chan os.Signal, 2)
 	signal.Notify(sigC, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-sigC
 		log.Printf("shutting down")
-		shutdownCtx, scancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer scancel()
-		deps.Recorder.StopAll(shutdownCtx)
 		cancel()
 	}()
 

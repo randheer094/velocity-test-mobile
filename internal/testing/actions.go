@@ -291,6 +291,73 @@ func largestScrollable(root ui.Element) (ui.Element, bool) {
 	return best, bestArea > 0
 }
 
+// SlowSwipeNode — Espresso slowSwipeLeft / slow gesture variant. Same as
+// SwipeNode but with a longer default duration.
+func (o *Orchestrator) SlowSwipeNode(ctx context.Context, deviceID string, m *matcher.Matcher, direction string) (ActionResult, error) {
+	return o.SwipeNode(ctx, deviceID, m, direction, 1500)
+}
+
+// ScrollToIndex — Compose performScrollToIndex(idx). Locates the matched
+// scrollable container and swipes within it `index` times in the natural
+// scroll direction (down for vertical, right for horizontal). This is a
+// pragmatic external approximation since LazyColumn/Row indexing is opaque
+// from outside the app.
+func (o *Orchestrator) ScrollToIndex(ctx context.Context, deviceID string, container *matcher.Matcher, index int) (ActionResult, error) {
+	if index < 0 {
+		return ActionResult{Reason: "index must be non-negative"}, fmt.Errorf("index out of range")
+	}
+	elem, _, err := o.fetchAndFind(ctx, deviceID, container)
+	if err != nil {
+		return ActionResult{Reason: err.Error()}, err
+	}
+	if !elem.Scrollable {
+		return ActionResult{Element: &elem, Reason: "matched element is not scrollable"}, fmt.Errorf("not scrollable")
+	}
+	for i := 0; i < index; i++ {
+		if err := o.swipeWithin(ctx, deviceID, elem, "up"); err != nil {
+			return ActionResult{Element: &elem, Reason: err.Error()}, err
+		}
+		select {
+		case <-ctx.Done():
+			return ActionResult{}, ctx.Err()
+		case <-time.After(150 * time.Millisecond):
+		}
+	}
+	x, y := CenterOf(elem)
+	return ActionResult{OK: true, Element: &elem, X: x, Y: y}, nil
+}
+
+// PerformKeyPress — Compose performKeyPress(key, meta). Currently supports
+// only a key name; modifier keys (Ctrl/Shift/Alt) are not portably available
+// via `adb shell input keyevent` without per-OEM `input keycombination`
+// support. Modifier flags are accepted but logged as best-effort.
+func (o *Orchestrator) PerformKeyPress(ctx context.Context, deviceID string, m *matcher.Matcher, key string, ctrl, shift, alt bool) (ActionResult, error) {
+	if m != nil && !m.IsEmpty() {
+		elem, _, err := o.fetchAndFind(ctx, deviceID, m)
+		if err != nil {
+			return ActionResult{Reason: err.Error()}, err
+		}
+		x, y := CenterOf(elem)
+		if !elem.Focused {
+			if err := o.Input.Tap(ctx, deviceID, x, y); err != nil {
+				return ActionResult{Element: &elem, X: x, Y: y, Reason: err.Error()}, err
+			}
+			select {
+			case <-ctx.Done():
+				return ActionResult{}, ctx.Err()
+			case <-time.After(120 * time.Millisecond):
+			}
+		}
+	}
+	if err := o.Input.PressButton(ctx, deviceID, key); err != nil {
+		return ActionResult{Reason: err.Error()}, err
+	}
+	_ = ctrl
+	_ = shift
+	_ = alt
+	return ActionResult{OK: true}, nil
+}
+
 // PerformIMEAction — Espresso pressImeActionButton (ENTER on a focused field).
 func (o *Orchestrator) PerformIMEAction(ctx context.Context, deviceID string, m *matcher.Matcher) (ActionResult, error) {
 	if m != nil && !m.IsEmpty() {

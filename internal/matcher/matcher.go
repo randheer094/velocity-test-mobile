@@ -67,6 +67,25 @@ type Matcher struct {
 	Scrollable    *bool `json:"scrollable,omitempty"`
 	Displayed     *bool `json:"displayed,omitempty" jsonschema:"requires non-zero bounds AND visibleToUser=true"`
 
+	// Visibility refinements (Espresso isCompletelyDisplayed / isDisplayingAtLeast)
+	CompletelyDisplayed      *bool `json:"completelyDisplayed,omitempty" jsonschema:"true requires the element to be fully on-screen, not partially clipped"`
+	DisplayingAtLeastPercent int   `json:"displayingAtLeastPercent,omitempty" jsonschema:"require at least N%% of the element's area to be on-screen (1..100)"`
+
+	// Compose / Espresso checked-state aliases
+	On         *bool `json:"on,omitempty" jsonschema:"alias for checked=true (Compose isOn)"`
+	Off        *bool `json:"off,omitempty" jsonschema:"alias for checked=false (Compose isOff)"`
+	Toggleable *bool `json:"toggleable,omitempty" jsonschema:"alias for checkable (Compose isToggleable)"`
+
+	// Tree-shape predicates (Espresso hasChildCount / isRoot / withParentIndex)
+	IsRoot        *bool `json:"isRoot,omitempty" jsonschema:"true matches the root of the hierarchy"`
+	ChildCount    *int  `json:"childCount,omitempty" jsonschema:"exact number of direct children (Espresso hasChildCount)"`
+	MinChildCount *int  `json:"minChildCount,omitempty" jsonschema:"at least this many direct children (Espresso hasMinimumChildCount)"`
+	ParentIndex   *int  `json:"parentIndex,omitempty" jsonschema:"this element must be the Nth child of its parent (0-indexed)"`
+
+	// IME / input-type predicates (Espresso hasImeAction / withInputType)
+	HasImeAction *bool  `json:"hasImeAction,omitempty" jsonschema:"true requires the element to declare any IME action"`
+	InputType    string `json:"inputType,omitempty" jsonschema:"substring match against the node's class for input-type discrimination (e.g. EditText, Password)"`
+
 	// Hierarchy combinators
 	HasDescendant *Matcher `json:"hasDescendant,omitempty"`
 	HasAncestor   *Matcher `json:"hasAncestor,omitempty"`
@@ -97,6 +116,11 @@ func (m *Matcher) IsEmpty() bool {
 		m.Checkable == nil && m.Checked == nil && m.Focused == nil &&
 		m.Focusable == nil && m.Selected == nil && m.Scrollable == nil &&
 		m.Displayed == nil &&
+		m.CompletelyDisplayed == nil && m.DisplayingAtLeastPercent == 0 &&
+		m.On == nil && m.Off == nil && m.Toggleable == nil &&
+		m.IsRoot == nil && m.ChildCount == nil && m.MinChildCount == nil &&
+		m.ParentIndex == nil &&
+		m.HasImeAction == nil && m.InputType == "" &&
 		m.HasDescendant == nil && m.HasAncestor == nil &&
 		m.HasParent == nil && m.HasSibling == nil &&
 		len(m.AllOf) == 0 && len(m.AnyOf) == 0 && m.Not == nil
@@ -183,6 +207,42 @@ func Match(e ui.Element, m *Matcher) (bool, error) {
 		if got != want {
 			return false, nil
 		}
+	}
+
+	// On / Off / Toggleable are syntactic sugar over Checked / Checkable.
+	if m.On != nil {
+		if e.Checked != *m.On {
+			return false, nil
+		}
+	}
+	if m.Off != nil {
+		if e.Checked == *m.Off {
+			// Off=true means checked must be false; Off=false means must be true.
+			return false, nil
+		}
+	}
+	if m.Toggleable != nil && e.Checkable != *m.Toggleable {
+		return false, nil
+	}
+
+	if m.ChildCount != nil && len(e.Children) != *m.ChildCount {
+		return false, nil
+	}
+	if m.MinChildCount != nil && len(e.Children) < *m.MinChildCount {
+		return false, nil
+	}
+
+	if m.HasImeAction != nil {
+		// External path: best-effort signal — node must accept text input
+		// (focusable + editable class) for HasImeAction=true.
+		got := e.Focusable && (strings.Contains(e.Class, "EditText") ||
+			strings.Contains(e.Class, "TextInput") || strings.Contains(e.Class, "TextField"))
+		if got != *m.HasImeAction {
+			return false, nil
+		}
+	}
+	if m.InputType != "" && !strings.Contains(e.Class, m.InputType) {
+		return false, nil
 	}
 
 	if m.Not != nil {

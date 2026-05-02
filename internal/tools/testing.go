@@ -201,6 +201,157 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 	registerSimpleAssert("assert_checked", "Assert the matched element is checked.", o.AssertChecked)
 	registerSimpleAssert("assert_unchecked", "Assert the matched element is not checked.", o.AssertUnchecked)
 
+	// Compose state-aliases.
+	addMatcherTool("assert_on", "Assert the matched element is checked (Compose assertIsOn).", true, nil, nil,
+		func(ctx context.Context, dev string, m *matcher.Matcher, _ json.RawMessage) (any, error) {
+			return o.AssertChecked(ctx, dev, m)
+		})
+	addMatcherTool("assert_off", "Assert the matched element is unchecked (Compose assertIsOff).", true, nil, nil,
+		func(ctx context.Context, dev string, m *matcher.Matcher, _ json.RawMessage) (any, error) {
+			return o.AssertUnchecked(ctx, dev, m)
+		})
+	addMatcherTool("assert_toggleable", "Assert the matched element is checkable/toggleable (Compose assertIsToggleable).", true, nil, nil,
+		func(ctx context.Context, dev string, m *matcher.Matcher, _ json.RawMessage) (any, error) {
+			return o.AssertCheckable(ctx, dev, m)
+		})
+
+	// Visibility refinements (isCompletelyDisplayed / isDisplayingAtLeast).
+	addMatcherTool("assert_completely_displayed",
+		"Assert the matched element is fully on-screen (Espresso isCompletelyDisplayed).", true,
+		nil, nil,
+		func(ctx context.Context, dev string, m *matcher.Matcher, _ json.RawMessage) (any, error) {
+			return o.AssertCompletelyDisplayed(ctx, dev, m)
+		})
+	addMatcherTool("assert_displaying_at_least",
+		"Assert the matched element is displaying at least N%% of its area (Espresso isDisplayingAtLeast).", true,
+		map[string]any{"percent": map[string]any{"type": "integer", "minimum": 1, "maximum": 100}},
+		[]string{"percent"},
+		func(ctx context.Context, dev string, m *matcher.Matcher, raw json.RawMessage) (any, error) {
+			var x struct {
+				Percent int `json:"percent"`
+			}
+			_ = json.Unmarshal(raw, &x)
+			return o.AssertDisplayingAtLeast(ctx, dev, m, x.Percent)
+		})
+
+	// isRoot / hasChildCount.
+	addMatcherTool("assert_is_root",
+		"Assert the matched element is the root of the hierarchy (Espresso isRoot).", true, nil, nil,
+		func(ctx context.Context, dev string, m *matcher.Matcher, _ json.RawMessage) (any, error) {
+			return o.AssertIsRoot(ctx, dev, m)
+		})
+	addMatcherTool("assert_has_child_count",
+		"Assert the matched element has exactly `count` direct children (Espresso hasChildCount).", true,
+		map[string]any{"count": map[string]any{"type": "integer", "minimum": 0}},
+		[]string{"count"},
+		func(ctx context.Context, dev string, m *matcher.Matcher, raw json.RawMessage) (any, error) {
+			var x struct {
+				Count int `json:"count"`
+			}
+			_ = json.Unmarshal(raw, &x)
+			return o.AssertChildCount(ctx, dev, m, x.Count, false)
+		})
+	addMatcherTool("assert_has_minimum_child_count",
+		"Assert the matched element has at least `count` direct children (Espresso hasMinimumChildCount).", true,
+		map[string]any{"count": map[string]any{"type": "integer", "minimum": 0}},
+		[]string{"count"},
+		func(ctx context.Context, dev string, m *matcher.Matcher, raw json.RawMessage) (any, error) {
+			var x struct {
+				Count int `json:"count"`
+			}
+			_ = json.Unmarshal(raw, &x)
+			return o.AssertChildCount(ctx, dev, m, x.Count, true)
+		})
+
+	// Width / height in dp (Compose).
+	addDpAssert := func(name, desc string, fn func(context.Context, string, *matcher.Matcher, int, float64) (testing.AssertResult, error)) {
+		addMatcherTool(name, desc, true,
+			map[string]any{
+				"dp":      map[string]any{"type": "integer", "minimum": 0},
+				"density": map[string]any{"type": "number", "description": "device density (px-per-dp); use device_get_screen_size first if unsure"},
+			},
+			[]string{"dp"},
+			func(ctx context.Context, dev string, m *matcher.Matcher, raw json.RawMessage) (any, error) {
+				var x struct {
+					Dp      int     `json:"dp"`
+					Density float64 `json:"density"`
+				}
+				_ = json.Unmarshal(raw, &x)
+				return fn(ctx, dev, m, x.Dp, x.Density)
+			})
+	}
+	addDpAssert("assert_width_dp", "Compose assertWidthIsEqualTo(dp).", o.AssertWidthDp)
+	addDpAssert("assert_height_dp", "Compose assertHeightIsEqualTo(dp).", o.AssertHeightDp)
+	addDpAssert("assert_width_at_least_dp", "Compose assertWidthIsAtLeast(dp).", o.AssertWidthAtLeastDp)
+	addDpAssert("assert_height_at_least_dp", "Compose assertHeightIsAtLeast(dp).", o.AssertHeightAtLeastDp)
+
+	// Position in root (Compose assertPositionInRootIsEqualTo).
+	addMatcherTool("assert_position_in_root",
+		"Assert the matched element's top-left position equals (x,y) ± tolerancePx pixels (Compose assertPositionInRootIsEqualTo).",
+		true,
+		map[string]any{
+			"x":           map[string]any{"type": "integer"},
+			"y":           map[string]any{"type": "integer"},
+			"tolerancePx": map[string]any{"type": "integer", "minimum": 0, "description": "default 0 — exact"},
+		},
+		[]string{"x", "y"},
+		func(ctx context.Context, dev string, m *matcher.Matcher, raw json.RawMessage) (any, error) {
+			var x struct {
+				X, Y, TolerancePx int
+			}
+			_ = json.Unmarshal(raw, &x)
+			return o.AssertPositionInRoot(ctx, dev, m, x.X, x.Y, x.TolerancePx)
+		})
+
+	// assert_any / assert_all — collection assertions over a sub-matcher.
+	for _, t := range []struct {
+		name, desc string
+		fn         func(context.Context, string, *matcher.Matcher, *matcher.Matcher) (testing.AssertResult, error)
+	}{
+		{"assert_any", "Assert at least one element in the matched collection also satisfies `sub` (Compose assertAny).", o.AssertAny},
+		{"assert_all", "Assert every element in the matched collection also satisfies `sub` (Compose assertAll).", o.AssertAll},
+	} {
+		name := t.name
+		desc := t.desc
+		fn := t.fn
+		s.AddTool(&mcp.Tool{
+			Name:        name,
+			Description: desc,
+			Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
+			InputSchema: map[string]any{
+				"type": "object",
+				"$defs": map[string]any{
+					"matcher": matcherSchemaDef,
+				},
+				"properties": map[string]any{
+					"device": deviceProp,
+					"match":  map[string]any{"$ref": "#/$defs/matcher"},
+					"sub":    map[string]any{"$ref": "#/$defs/matcher"},
+				},
+				"required":             []string{"match", "sub"},
+				"additionalProperties": false,
+			},
+		}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			var args struct {
+				Device string          `json:"device"`
+				Match  matcher.Matcher `json:"match"`
+				Sub    matcher.Matcher `json:"sub"`
+			}
+			if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
+				return errResultDirect(err), nil
+			}
+			dev, err := d.resolveDevice(ctx, args.Device)
+			if err != nil {
+				return errResultDirect(err), nil
+			}
+			res, err := fn(ctx, dev, &args.Match, &args.Sub)
+			if err != nil {
+				return errResultDirect(err), nil
+			}
+			return jsonResultDirect(res), nil
+		})
+	}
+
 	addMatcherTool("assert_text_equals",
 		"Assert the matched element's text equals the expected string (Compose assertTextEquals).",
 		true,
@@ -376,6 +527,56 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 			return res, nil
 		})
 
+	addMatcherTool("slow_swipe_node",
+		"Slow variant of swipe_node (~1500ms) — Espresso slowSwipeLeft/Right.",
+		false,
+		map[string]any{
+			"direction": map[string]any{"type": "string", "enum": []string{"up", "down", "left", "right"}},
+		},
+		[]string{"direction"},
+		func(ctx context.Context, dev string, m *matcher.Matcher, raw json.RawMessage) (any, error) {
+			var x struct {
+				Direction string `json:"direction"`
+			}
+			_ = json.Unmarshal(raw, &x)
+			res, _ := o.SlowSwipeNode(ctx, dev, m, x.Direction)
+			return res, nil
+		})
+
+	addMatcherTool("scroll_to_index",
+		"Scroll within the matched scrollable container by `index` swipes (Compose performScrollToIndex). External approximation: LazyColumn/Row item indexing is opaque from outside the app, so this dispatches `index` page-sized swipes inside the container.",
+		false,
+		map[string]any{"index": map[string]any{"type": "integer", "minimum": 0}},
+		[]string{"index"},
+		func(ctx context.Context, dev string, m *matcher.Matcher, raw json.RawMessage) (any, error) {
+			var x struct {
+				Index int `json:"index"`
+			}
+			_ = json.Unmarshal(raw, &x)
+			res, _ := o.ScrollToIndex(ctx, dev, m, x.Index)
+			return res, nil
+		})
+
+	addMatcherTool("perform_key_press",
+		"Press a key, optionally focusing the matched element first (Compose performKeyPress). Modifier flags (ctrl/shift/alt) are accepted but only honored on devices whose `input keycombination` supports them.",
+		false,
+		map[string]any{
+			"key":   map[string]any{"type": "string", "description": "key name; e.g. ENTER, BACK, TAB, DPAD_DOWN"},
+			"ctrl":  map[string]any{"type": "boolean"},
+			"shift": map[string]any{"type": "boolean"},
+			"alt":   map[string]any{"type": "boolean"},
+		},
+		[]string{"key"},
+		func(ctx context.Context, dev string, m *matcher.Matcher, raw json.RawMessage) (any, error) {
+			var x struct {
+				Key              string
+				Ctrl, Shift, Alt bool
+			}
+			_ = json.Unmarshal(raw, &x)
+			res, _ := o.PerformKeyPress(ctx, dev, m, x.Key, x.Ctrl, x.Shift, x.Alt)
+			return res, nil
+		})
+
 	addMatcherTool("scroll_to",
 		"Scroll a scrollable ancestor until the matched element is visible (Espresso scrollTo / Compose performScrollToNode).",
 		false,
@@ -484,6 +685,25 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 			return o.WaitUntilCount(ctx, dev, m, x.Count, x.TimeoutMs, x.IntervalMs)
 		})
 
+	addMatcherTool("wait_until_at_least_one_exists",
+		"Poll until at least `count` matching elements are present (Compose waitUntilAtLeastOneExists).",
+		true,
+		map[string]any{
+			"count":      map[string]any{"type": "integer", "minimum": 1, "description": "default 1"},
+			"timeoutMs":  waitProps["timeoutMs"],
+			"intervalMs": waitProps["intervalMs"],
+		},
+		nil,
+		func(ctx context.Context, dev string, m *matcher.Matcher, raw json.RawMessage) (any, error) {
+			var x struct {
+				Count      int `json:"count"`
+				TimeoutMs  int `json:"timeoutMs"`
+				IntervalMs int `json:"intervalMs"`
+			}
+			_ = json.Unmarshal(raw, &x)
+			return o.WaitUntilAtLeastOneExists(ctx, dev, m, x.Count, x.TimeoutMs, x.IntervalMs)
+		})
+
 	addDeviceTool("wait_for_idle",
 		"Approximate Espresso onIdle / Compose waitForIdle: poll the tree until it stops changing for idleWindowMs. Heuristic — there is no real IdlingResource hook from outside the app.",
 		true,
@@ -510,6 +730,15 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 			}
 			return map[string]string{"pressed": "BACK"}, nil
 		})
+	addDeviceTool("press_back_unconditionally",
+		"Press BACK without raising a NoActivityResumedException equivalent (Espresso pressBackUnconditionally). Externally identical to espresso_press_back.",
+		false, nil, nil,
+		func(ctx context.Context, dev string, _ json.RawMessage) (any, error) {
+			if err := d.Input.PressButton(ctx, dev, "BACK"); err != nil {
+				return nil, err
+			}
+			return map[string]string{"pressed": "BACK"}, nil
+		})
 	addDeviceTool("close_soft_keyboard", "Best-effort dismiss the soft keyboard (Espresso closeSoftKeyboard); presses BACK which collapses most IMEs.", false, nil, nil,
 		func(ctx context.Context, dev string, _ json.RawMessage) (any, error) {
 			if err := d.Input.PressButton(ctx, dev, "BACK"); err != nil {
@@ -518,6 +747,15 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 			return map[string]string{"keyboard": "closed"}, nil
 		})
 	addDeviceTool("open_overflow_menu", "Open the action-bar overflow / options menu (Espresso openActionBarOverflowOrOptionsMenu).", false, nil, nil,
+		func(ctx context.Context, dev string, _ json.RawMessage) (any, error) {
+			if err := d.Input.PressButton(ctx, dev, "MENU"); err != nil {
+				return nil, err
+			}
+			return map[string]string{"menu": "opened"}, nil
+		})
+	addDeviceTool("open_contextual_action_mode_menu",
+		"Open the contextual action-mode overflow menu (Espresso openContextualActionModeOverflowMenu). Maps to MENU key like the standard overflow menu.",
+		false, nil, nil,
 		func(ctx context.Context, dev string, _ json.RawMessage) (any, error) {
 			if err := d.Input.PressButton(ctx, dev, "MENU"); err != nil {
 				return nil, err
@@ -543,11 +781,40 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 			return map[string]string{"status": "started"}, nil
 		})
 
+	addDeviceTool("intent_monitor_stop",
+		"End the active intent-monitoring window (Espresso Intents.release).",
+		false, nil, nil,
+		func(ctx context.Context, dev string, _ json.RawMessage) (any, error) {
+			intents.Stop(dev)
+			return map[string]string{"status": "stopped"}, nil
+		})
+
 	addDeviceTool("intent_list_captured",
 		"Return every captured intent in the active monitoring window.",
 		true, nil, nil,
 		func(ctx context.Context, dev string, _ json.RawMessage) (any, error) {
 			return intents.List(ctx, dev)
+		})
+
+	addDeviceTool("assert_intent_count",
+		"Assert the number of captured intents satisfying the matcher equals expected (Espresso intended(matcher, times(n))).",
+		true,
+		map[string]any{
+			"expected":     map[string]any{"type": "integer", "minimum": 0},
+			"action":       map[string]any{"type": "string"},
+			"data":         map[string]any{"type": "string"},
+			"dataContains": map[string]any{"type": "string"},
+			"package":      map[string]any{"type": "string"},
+			"category":     map[string]any{"type": "string"},
+		},
+		[]string{"expected"},
+		func(ctx context.Context, dev string, raw json.RawMessage) (any, error) {
+			var x struct {
+				Expected int `json:"expected"`
+				testing.IntentMatcher
+			}
+			_ = json.Unmarshal(raw, &x)
+			return intents.AssertCount(ctx, dev, x.IntentMatcher, x.Expected)
 		})
 
 	addDeviceTool("assert_intent_sent",

@@ -114,6 +114,33 @@ func (o *Orchestrator) WaitUntilText(ctx context.Context, deviceID string, m *ma
 	return res, nil
 }
 
+// WaitUntilAtLeastOneExists — Compose waitUntilAtLeastOneExists. Polls
+// until at least `min` matching elements are present.
+func (o *Orchestrator) WaitUntilAtLeastOneExists(ctx context.Context, deviceID string, m *matcher.Matcher, minCount, timeoutMs, intervalMs int) (WaitResult, error) {
+	if m == nil || m.IsEmpty() {
+		return WaitResult{}, matcher.ErrEmptyMatcher
+	}
+	if minCount <= 0 {
+		minCount = 1
+	}
+	start := time.Now()
+	lastCount := 0
+	attempts, ok, _ := pollUntil(ctx, timeoutMs, intervalMs, func(ctx context.Context) (bool, error) {
+		root, err := o.Layout.Tree(ctx, deviceID)
+		if err != nil {
+			return false, err
+		}
+		all, _ := matcher.FindAll(root, m)
+		lastCount = len(all)
+		return lastCount >= minCount, nil
+	})
+	res := WaitResult{Attempts: attempts, WaitedMs: time.Since(start).Milliseconds(), OK: ok, MatchedNow: lastCount}
+	if !ok {
+		res.Reason = fmt.Sprintf("only %d matched, need >= %d", lastCount, minCount)
+	}
+	return res, nil
+}
+
 // WaitUntilCount — wait until the matcher resolves to exactly `count` nodes.
 func (o *Orchestrator) WaitUntilCount(ctx context.Context, deviceID string, m *matcher.Matcher, count, timeoutMs, intervalMs int) (WaitResult, error) {
 	if m == nil || m.IsEmpty() {

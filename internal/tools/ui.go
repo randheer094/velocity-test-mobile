@@ -2,9 +2,7 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"os"
-	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -12,7 +10,9 @@ import (
 	"github.com/randheer094/velocity-mcp-mobile/internal/ui"
 )
 
-// RegisterUI registers screen capture, layout, resolve, assertions, and diff tools.
+// RegisterUI exposes the screen-snapshot helpers used by tests for visual
+// regression and debugging. Element discovery and waiting belong to the
+// testing layer (find_node / find_all_nodes / wait_until_*).
 func RegisterUI(s *mcp.Server, d *Deps) {
 	type captureArgs struct {
 		DeviceArg
@@ -47,7 +47,7 @@ func RegisterUI(s *mcp.Server, d *Deps) {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "screen_layout",
-		Description: "Return the on-screen UI hierarchy as a flat list of interactive elements with bounds. Prefers `android layout` JSON; falls back to UIAutomator.",
+		Description: "Return the on-screen UI hierarchy as a flat list of interactive elements with bounds. Convenience wrapper over the layout source — for fine-grained selection prefer find_node / find_all_nodes.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, args DeviceArg) (*mcp.CallToolResult, any, error) {
 		dev, err := d.resolveDevice(ctx, args.Device)
@@ -68,7 +68,7 @@ func RegisterUI(s *mcp.Server, d *Deps) {
 	}
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "screen_resolve",
-		Description: "Resolve a visible label to coordinates using `android screen resolve` (LLM-friendly visual lookup). Requires the Android agent CLI.",
+		Description: "Resolve a visible label to coordinates using the Android agent CLI's `screen resolve` (LLM-friendly visual lookup).",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, args resolveArgs) (*mcp.CallToolResult, any, error) {
 		if d.AndroidCLI == nil || !d.AndroidCLI.Available() {
@@ -94,108 +94,6 @@ func RegisterUI(s *mcp.Server, d *Deps) {
 		return textResult(string(res.Stdout))
 	})
 
-	type waitArgs struct {
-		DeviceArg
-		Text        string `json:"text,omitempty" jsonschema:"text substring or /regex/"`
-		ContentDesc string `json:"contentDesc,omitempty"`
-		ResourceID  string `json:"resourceId,omitempty"`
-		Class       string `json:"class,omitempty"`
-		TimeoutMs   int    `json:"timeoutMs,omitempty" jsonschema:"max wait in milliseconds (default 10000)"`
-		IntervalMs  int    `json:"intervalMs,omitempty" jsonschema:"poll interval in milliseconds (default 250)"`
-	}
-	mcp.AddTool(s, &mcp.Tool{
-		Name:        "wait_for_element",
-		Description: "Poll the UI hierarchy until an element matching the predicate appears, or timeout. Returns the matched element with bounds.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, args waitArgs) (*mcp.CallToolResult, any, error) {
-		dev, err := d.resolveDevice(ctx, args.Device)
-		if err != nil {
-			return errResult(err)
-		}
-		timeout := args.TimeoutMs
-		if timeout <= 0 {
-			timeout = 10000
-		}
-		interval := args.IntervalMs
-		if interval <= 0 {
-			interval = 250
-		}
-		predicate := ui.Predicate{
-			Text:        args.Text,
-			ContentDesc: args.ContentDesc,
-			ResourceID:  args.ResourceID,
-			Class:       args.Class,
-		}
-		if predicate == (ui.Predicate{}) {
-			return errResult(fmt.Errorf("at least one of text/contentDesc/resourceId/class is required"))
-		}
-		deadline := time.Now().Add(time.Duration(timeout) * time.Millisecond)
-		attempts := 0
-		for {
-			attempts++
-			root, err := d.Layout.Tree(ctx, dev)
-			if err == nil {
-				if got, ok := ui.Match(root, predicate); ok {
-					return jsonResult(map[string]any{
-						"matched":  true,
-						"attempts": attempts,
-						"element":  got,
-					})
-				}
-			}
-			if time.Now().After(deadline) {
-				return jsonResult(map[string]any{
-					"matched":  false,
-					"attempts": attempts,
-				})
-			}
-			select {
-			case <-ctx.Done():
-				return errResult(ctx.Err())
-			case <-time.After(time.Duration(interval) * time.Millisecond):
-			}
-		}
-	})
-
-	type assertArgs struct {
-		DeviceArg
-		Text      string `json:"text" jsonschema:"text substring or /regex/ that must appear"`
-		TimeoutMs int    `json:"timeoutMs,omitempty"`
-	}
-	mcp.AddTool(s, &mcp.Tool{
-		Name:        "assert_text_visible",
-		Description: "Assert that a substring (or /regex/) is visible on screen within the timeout.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, args assertArgs) (*mcp.CallToolResult, any, error) {
-		dev, err := d.resolveDevice(ctx, args.Device)
-		if err != nil {
-			return errResult(err)
-		}
-		timeout := args.TimeoutMs
-		if timeout <= 0 {
-			timeout = 5000
-		}
-		deadline := time.Now().Add(time.Duration(timeout) * time.Millisecond)
-		attempts := 0
-		for {
-			attempts++
-			root, err := d.Layout.Tree(ctx, dev)
-			if err == nil {
-				if _, ok := ui.Match(root, ui.Predicate{Text: args.Text}); ok {
-					return jsonResult(map[string]any{"ok": true, "attempts": attempts})
-				}
-			}
-			if time.Now().After(deadline) {
-				return jsonResult(map[string]any{"ok": false, "attempts": attempts})
-			}
-			select {
-			case <-ctx.Done():
-				return errResult(ctx.Err())
-			case <-time.After(250 * time.Millisecond):
-			}
-		}
-	})
-
 	type diffArgs struct {
 		PathA        string  `json:"pathA" jsonschema:"baseline PNG path"`
 		PathB        string  `json:"pathB" jsonschema:"comparison PNG path"`
@@ -205,7 +103,7 @@ func RegisterUI(s *mcp.Server, d *Deps) {
 	}
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "screen_diff",
-		Description: "Pixel-level compare of two PNGs. Optionally writes a red-overlay diff image. Returns mismatch counts and percentage.",
+		Description: "Pixel-level visual regression comparison between two PNGs. Optionally writes a red-overlay diff image.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, args diffArgs) (*mcp.CallToolResult, any, error) {
 		res, err := ui.Diff(args.PathA, args.PathB, args.DiffOutput, args.Tolerance, args.ThresholdPct)

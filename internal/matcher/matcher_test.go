@@ -135,6 +135,103 @@ func TestEmptyMatcher(t *testing.T) {
 	}
 }
 
+func TestVisibilityRefinements(t *testing.T) {
+	root := ui.Element{
+		Class:         "FrameLayout",
+		Bounds:        ui.Bounds{Width: 1000, Height: 1000},
+		Enabled:       true,
+		VisibleToUser: true,
+		Children: []ui.Element{
+			// Fully on-screen
+			{Class: "TextView", Text: "FullyVisible", Bounds: ui.Bounds{X: 100, Y: 100, Width: 200, Height: 100}, Enabled: true, VisibleToUser: true},
+			// Partially clipped — half off the right edge
+			{Class: "TextView", Text: "HalfOff", Bounds: ui.Bounds{X: 900, Y: 100, Width: 200, Height: 100}, Enabled: true, VisibleToUser: true},
+		},
+	}
+	got, err := FindAll(root, &Matcher{Text: "FullyVisible", CompletelyDisplayed: boolPtr(true)})
+	if err != nil || len(got) != 1 {
+		t.Fatalf("FullyVisible: %d %v", len(got), err)
+	}
+	got, err = FindAll(root, &Matcher{Text: "HalfOff", CompletelyDisplayed: boolPtr(true)})
+	if err != nil || len(got) != 0 {
+		t.Fatalf("HalfOff should not be completely displayed: %d %v", len(got), err)
+	}
+	got, err = FindAll(root, &Matcher{Text: "HalfOff", DisplayingAtLeastPercent: 30})
+	if err != nil || len(got) != 1 {
+		t.Fatalf("HalfOff at 30%%: %d %v", len(got), err)
+	}
+	got, err = FindAll(root, &Matcher{Text: "HalfOff", DisplayingAtLeastPercent: 75})
+	if err != nil || len(got) != 0 {
+		t.Fatalf("HalfOff at 75%% should fail: %d %v", len(got), err)
+	}
+}
+
+func TestTreePositionPredicates(t *testing.T) {
+	root := ui.Element{
+		Class: "FrameLayout", Enabled: true, VisibleToUser: true,
+		Bounds: ui.Bounds{Width: 1000, Height: 1000},
+		Children: []ui.Element{
+			{Class: "Container", Enabled: true, VisibleToUser: true, Bounds: ui.Bounds{Width: 100, Height: 100}, Children: []ui.Element{
+				{Class: "Item", Text: "A", Enabled: true, VisibleToUser: true, Bounds: ui.Bounds{Width: 10, Height: 10}},
+				{Class: "Item", Text: "B", Enabled: true, VisibleToUser: true, Bounds: ui.Bounds{Width: 10, Height: 10}},
+				{Class: "Item", Text: "C", Enabled: true, VisibleToUser: true, Bounds: ui.Bounds{Width: 10, Height: 10}},
+			}},
+		},
+	}
+	zero := 0
+	one := 1
+	two := 2
+	three := 3
+
+	got, err := FindAll(root, &Matcher{ClassName: "FrameLayout", IsRoot: boolPtr(true)})
+	if err != nil || len(got) != 1 {
+		t.Fatalf("IsRoot: %d %v", len(got), err)
+	}
+	got, err = FindAll(root, &Matcher{ClassName: "Item", IsRoot: boolPtr(true)})
+	if err != nil || len(got) != 0 {
+		t.Fatalf("Items aren't root: %d %v", len(got), err)
+	}
+	got, err = FindAll(root, &Matcher{ClassName: "Item", ParentIndex: &zero})
+	if err != nil || len(got) != 1 || got[0].Text != "A" {
+		t.Fatalf("ParentIndex 0: %+v %v", got, err)
+	}
+	got, err = FindAll(root, &Matcher{ClassName: "Item", ParentIndex: &two})
+	if err != nil || len(got) != 1 || got[0].Text != "C" {
+		t.Fatalf("ParentIndex 2: %+v %v", got, err)
+	}
+	got, err = FindAll(root, &Matcher{ClassName: "Container", ChildCount: &three})
+	if err != nil || len(got) != 1 {
+		t.Fatalf("ChildCount 3: %d %v", len(got), err)
+	}
+	got, err = FindAll(root, &Matcher{ClassName: "Container", MinChildCount: &one})
+	if err != nil || len(got) != 1 {
+		t.Fatalf("MinChildCount 1: %d %v", len(got), err)
+	}
+}
+
+func TestOnOffToggleable(t *testing.T) {
+	root := ui.Element{
+		Class: "FrameLayout", Enabled: true, VisibleToUser: true,
+		Bounds: ui.Bounds{Width: 100, Height: 100},
+		Children: []ui.Element{
+			{Class: "CheckBox", Text: "Subscribe", Checkable: true, Checked: true, Enabled: true, VisibleToUser: true, Bounds: ui.Bounds{Width: 10, Height: 10}},
+			{Class: "CheckBox", Text: "Notify", Checkable: true, Checked: false, Enabled: true, VisibleToUser: true, Bounds: ui.Bounds{Width: 10, Height: 10}},
+		},
+	}
+	got, err := FindAll(root, &Matcher{ClassName: "CheckBox", On: boolPtr(true)})
+	if err != nil || len(got) != 1 || got[0].Text != "Subscribe" {
+		t.Fatalf("On: %+v %v", got, err)
+	}
+	got, err = FindAll(root, &Matcher{ClassName: "CheckBox", Off: boolPtr(true)})
+	if err != nil || len(got) != 1 || got[0].Text != "Notify" {
+		t.Fatalf("Off: %+v %v", got, err)
+	}
+	got, err = FindAll(root, &Matcher{ClassName: "CheckBox", Toggleable: boolPtr(true)})
+	if err != nil || len(got) != 2 {
+		t.Fatalf("Toggleable: %d %v", len(got), err)
+	}
+}
+
 func TestInstance(t *testing.T) {
 	root := tree()
 	first, err := Find(root, &Matcher{ResourceID: "item"})

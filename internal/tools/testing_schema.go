@@ -33,6 +33,21 @@ var matcherSchemaDef = map[string]any{
 		"scrollable":    map[string]any{"type": "boolean"},
 		"displayed":     map[string]any{"type": "boolean", "description": "true means non-zero bounds AND visibleToUser"},
 
+		"completelyDisplayed":      map[string]any{"type": "boolean", "description": "Espresso isCompletelyDisplayed — fully on-screen, not partially clipped"},
+		"displayingAtLeastPercent": map[string]any{"type": "integer", "minimum": 1, "maximum": 100, "description": "Espresso isDisplayingAtLeast — require N%% of area visible"},
+
+		"on":         map[string]any{"type": "boolean", "description": "Compose isOn — alias for checked=true"},
+		"off":        map[string]any{"type": "boolean", "description": "Compose isOff — alias for checked=false"},
+		"toggleable": map[string]any{"type": "boolean", "description": "Compose isToggleable — alias for checkable"},
+
+		"isRoot":        map[string]any{"type": "boolean", "description": "Espresso isRoot"},
+		"childCount":    map[string]any{"type": "integer", "minimum": 0, "description": "Espresso hasChildCount"},
+		"minChildCount": map[string]any{"type": "integer", "minimum": 0, "description": "Espresso hasMinimumChildCount"},
+		"parentIndex":   map[string]any{"type": "integer", "minimum": 0, "description": "Espresso withParentIndex — Nth child of parent"},
+
+		"hasImeAction": map[string]any{"type": "boolean", "description": "Espresso hasImeAction (best-effort externally)"},
+		"inputType":    map[string]any{"type": "string", "description": "Espresso withInputType — substring match against class"},
+
 		"hasAncestor":   map[string]any{"$ref": "#/$defs/matcher"},
 		"hasDescendant": map[string]any{"$ref": "#/$defs/matcher"},
 		"hasParent":     map[string]any{"$ref": "#/$defs/matcher"},

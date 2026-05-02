@@ -220,6 +220,256 @@ func (o *Orchestrator) AssertCountEquals(ctx context.Context, deviceID string, m
 	return AssertResult{OK: false, Matched: len(all), Reason: fmt.Sprintf("matched %d, expected %d", len(all), expected)}, nil
 }
 
+// AssertWidthDp — Compose assertWidthIsEqualTo(dp). The pixel width is
+// converted to dp via the supplied density (1.0 if zero); a small tolerance
+// is allowed to absorb sub-pixel rounding.
+func (o *Orchestrator) AssertWidthDp(ctx context.Context, deviceID string, m *matcher.Matcher, expectedDp int, density float64) (AssertResult, error) {
+	if density <= 0 {
+		density = 1.0
+	}
+	return o.assertWith(ctx, deviceID, m, func(e ui.Element) (bool, string) {
+		gotDp := int(float64(e.Bounds.Width)/density + 0.5)
+		if absInt(gotDp-expectedDp) <= 1 {
+			return true, ""
+		}
+		return false, fmt.Sprintf("widthDp=%d, expected %d (density=%v)", gotDp, expectedDp, density)
+	})
+}
+
+// AssertHeightDp — Compose assertHeightIsEqualTo(dp).
+func (o *Orchestrator) AssertHeightDp(ctx context.Context, deviceID string, m *matcher.Matcher, expectedDp int, density float64) (AssertResult, error) {
+	if density <= 0 {
+		density = 1.0
+	}
+	return o.assertWith(ctx, deviceID, m, func(e ui.Element) (bool, string) {
+		gotDp := int(float64(e.Bounds.Height)/density + 0.5)
+		if absInt(gotDp-expectedDp) <= 1 {
+			return true, ""
+		}
+		return false, fmt.Sprintf("heightDp=%d, expected %d (density=%v)", gotDp, expectedDp, density)
+	})
+}
+
+// AssertWidthAtLeastDp — Compose assertWidthIsAtLeast.
+func (o *Orchestrator) AssertWidthAtLeastDp(ctx context.Context, deviceID string, m *matcher.Matcher, minDp int, density float64) (AssertResult, error) {
+	if density <= 0 {
+		density = 1.0
+	}
+	return o.assertWith(ctx, deviceID, m, func(e ui.Element) (bool, string) {
+		gotDp := int(float64(e.Bounds.Width) / density)
+		if gotDp >= minDp {
+			return true, ""
+		}
+		return false, fmt.Sprintf("widthDp=%d, expected >= %d (density=%v)", gotDp, minDp, density)
+	})
+}
+
+// AssertHeightAtLeastDp — Compose assertHeightIsAtLeast.
+func (o *Orchestrator) AssertHeightAtLeastDp(ctx context.Context, deviceID string, m *matcher.Matcher, minDp int, density float64) (AssertResult, error) {
+	if density <= 0 {
+		density = 1.0
+	}
+	return o.assertWith(ctx, deviceID, m, func(e ui.Element) (bool, string) {
+		gotDp := int(float64(e.Bounds.Height) / density)
+		if gotDp >= minDp {
+			return true, ""
+		}
+		return false, fmt.Sprintf("heightDp=%d, expected >= %d (density=%v)", gotDp, minDp, density)
+	})
+}
+
+// AssertPositionInRoot — Compose assertPositionInRootIsEqualTo. Pixel-based
+// since dp would require density; LLM agent can compare to a captured
+// expected value or use density for conversion.
+func (o *Orchestrator) AssertPositionInRoot(ctx context.Context, deviceID string, m *matcher.Matcher, expectedX, expectedY int, tolerancePx int) (AssertResult, error) {
+	if tolerancePx < 0 {
+		tolerancePx = 0
+	}
+	return o.assertWith(ctx, deviceID, m, func(e ui.Element) (bool, string) {
+		dx := absInt(e.Bounds.X - expectedX)
+		dy := absInt(e.Bounds.Y - expectedY)
+		if dx <= tolerancePx && dy <= tolerancePx {
+			return true, ""
+		}
+		return false, fmt.Sprintf("position=(%d,%d), expected (%d,%d) ±%d", e.Bounds.X, e.Bounds.Y, expectedX, expectedY, tolerancePx)
+	})
+}
+
+// AssertAny — Compose assertAny: at least one of the matched collection
+// also satisfies sub-matcher.
+func (o *Orchestrator) AssertAny(ctx context.Context, deviceID string, m *matcher.Matcher, sub *matcher.Matcher) (AssertResult, error) {
+	root, err := o.Layout.Tree(ctx, deviceID)
+	if err != nil {
+		return AssertResult{}, err
+	}
+	all, err := matcher.FindAll(root, m)
+	if err == matcher.ErrEmptyMatcher {
+		return AssertResult{}, err
+	}
+	if err != nil && err != matcher.ErrNotFound {
+		return AssertResult{}, err
+	}
+	for _, e := range all {
+		ok, perr := matcher.Match(e, sub)
+		if perr != nil {
+			return AssertResult{}, perr
+		}
+		if ok {
+			ec := e
+			return AssertResult{OK: true, Element: &ec, Matched: len(all)}, nil
+		}
+	}
+	return AssertResult{OK: false, Matched: len(all), Reason: "no matched element satisfied the sub-matcher"}, nil
+}
+
+// AssertAll — Compose assertAll: every matched element must also satisfy
+// the sub-matcher.
+func (o *Orchestrator) AssertAll(ctx context.Context, deviceID string, m *matcher.Matcher, sub *matcher.Matcher) (AssertResult, error) {
+	root, err := o.Layout.Tree(ctx, deviceID)
+	if err != nil {
+		return AssertResult{}, err
+	}
+	all, err := matcher.FindAll(root, m)
+	if err == matcher.ErrEmptyMatcher {
+		return AssertResult{}, err
+	}
+	if err != nil && err != matcher.ErrNotFound {
+		return AssertResult{}, err
+	}
+	if len(all) == 0 {
+		return AssertResult{OK: false, Reason: "no elements matched the outer selector"}, nil
+	}
+	for _, e := range all {
+		ok, perr := matcher.Match(e, sub)
+		if perr != nil {
+			return AssertResult{}, perr
+		}
+		if !ok {
+			ec := e
+			return AssertResult{OK: false, Matched: len(all), Element: &ec, Reason: "at least one element failed the sub-matcher"}, nil
+		}
+	}
+	return AssertResult{OK: true, Matched: len(all)}, nil
+}
+
+func absInt(v int) int {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
+// assertCheckable — Compose assertIsToggleable; checks the Checkable flag.
+func (o *Orchestrator) AssertCheckable(ctx context.Context, deviceID string, m *matcher.Matcher) (AssertResult, error) {
+	return o.assertWith(ctx, deviceID, m, func(e ui.Element) (bool, string) {
+		if e.Checkable {
+			return true, ""
+		}
+		return false, "element is not toggleable (checkable=false)"
+	})
+}
+
+// assertCompletelyDisplayed — Espresso isCompletelyDisplayed via the
+// matcher-level CompletelyDisplayed flag.
+func (o *Orchestrator) AssertCompletelyDisplayed(ctx context.Context, deviceID string, m *matcher.Matcher) (AssertResult, error) {
+	combined := *m
+	yes := true
+	combined.CompletelyDisplayed = &yes
+	root, err := o.Layout.Tree(ctx, deviceID)
+	if err != nil {
+		return AssertResult{}, err
+	}
+	all, err := matcher.FindAll(root, &combined)
+	if err == matcher.ErrEmptyMatcher {
+		return AssertResult{}, err
+	}
+	if err != nil && err != matcher.ErrNotFound {
+		return AssertResult{}, err
+	}
+	if len(all) == 0 {
+		return AssertResult{OK: false, Reason: "no element matched and was completely displayed"}, nil
+	}
+	first := all[0]
+	return AssertResult{OK: true, Element: &first, Matched: len(all)}, nil
+}
+
+// assertDisplayingAtLeast — Espresso isDisplayingAtLeast(percent).
+func (o *Orchestrator) AssertDisplayingAtLeast(ctx context.Context, deviceID string, m *matcher.Matcher, percent int) (AssertResult, error) {
+	if percent < 1 {
+		percent = 1
+	}
+	if percent > 100 {
+		percent = 100
+	}
+	combined := *m
+	combined.DisplayingAtLeastPercent = percent
+	root, err := o.Layout.Tree(ctx, deviceID)
+	if err != nil {
+		return AssertResult{}, err
+	}
+	all, err := matcher.FindAll(root, &combined)
+	if err == matcher.ErrEmptyMatcher {
+		return AssertResult{}, err
+	}
+	if err != nil && err != matcher.ErrNotFound {
+		return AssertResult{}, err
+	}
+	if len(all) == 0 {
+		return AssertResult{OK: false, Reason: fmt.Sprintf("no element matched while displaying at least %d%%", percent)}, nil
+	}
+	first := all[0]
+	return AssertResult{OK: true, Element: &first, Matched: len(all)}, nil
+}
+
+// assertIsRoot — Espresso isRoot.
+func (o *Orchestrator) AssertIsRoot(ctx context.Context, deviceID string, m *matcher.Matcher) (AssertResult, error) {
+	combined := *m
+	yes := true
+	combined.IsRoot = &yes
+	root, err := o.Layout.Tree(ctx, deviceID)
+	if err != nil {
+		return AssertResult{}, err
+	}
+	all, err := matcher.FindAll(root, &combined)
+	if err == matcher.ErrEmptyMatcher {
+		return AssertResult{}, err
+	}
+	if err != nil && err != matcher.ErrNotFound {
+		return AssertResult{}, err
+	}
+	if len(all) == 0 {
+		return AssertResult{OK: false, Reason: "matched element is not the root"}, nil
+	}
+	first := all[0]
+	return AssertResult{OK: true, Element: &first, Matched: len(all)}, nil
+}
+
+// assertChildCount — Espresso hasChildCount / hasMinimumChildCount.
+func (o *Orchestrator) AssertChildCount(ctx context.Context, deviceID string, m *matcher.Matcher, count int, atLeast bool) (AssertResult, error) {
+	combined := *m
+	if atLeast {
+		combined.MinChildCount = &count
+	} else {
+		combined.ChildCount = &count
+	}
+	root, err := o.Layout.Tree(ctx, deviceID)
+	if err != nil {
+		return AssertResult{}, err
+	}
+	all, err := matcher.FindAll(root, &combined)
+	if err == matcher.ErrEmptyMatcher {
+		return AssertResult{}, err
+	}
+	if err != nil && err != matcher.ErrNotFound {
+		return AssertResult{}, err
+	}
+	if len(all) == 0 {
+		return AssertResult{OK: false, Reason: fmt.Sprintf("no element matched with the required child count")}, nil
+	}
+	first := all[0]
+	return AssertResult{OK: true, Element: &first, Matched: len(all)}, nil
+}
+
 // AssertHasDescendant — Espresso hasDescendant.
 func (o *Orchestrator) AssertHasDescendant(ctx context.Context, deviceID string, m *matcher.Matcher, descendant *matcher.Matcher) (AssertResult, error) {
 	combined := *m

@@ -14,9 +14,7 @@ import (
 	"github.com/randheer094/velocity-mcp-mobile/internal/apps"
 	"github.com/randheer094/velocity-mcp-mobile/internal/device"
 	"github.com/randheer094/velocity-mcp-mobile/internal/diagnostics"
-	"github.com/randheer094/velocity-mcp-mobile/internal/files"
 	"github.com/randheer094/velocity-mcp-mobile/internal/input"
-	"github.com/randheer094/velocity-mcp-mobile/internal/maintenance"
 	"github.com/randheer094/velocity-mcp-mobile/internal/system"
 	apptest "github.com/randheer094/velocity-mcp-mobile/internal/testing"
 	"github.com/randheer094/velocity-mcp-mobile/internal/ui"
@@ -24,27 +22,18 @@ import (
 
 // Deps bundles every shared client used by tool handlers.
 type Deps struct {
-	Adb         *adb.Client
-	AndroidCLI  *androidcli.Client
-	Resolver    *device.Resolver
-	Apps        *apps.Client
-	Layout      *ui.LayoutClient
-	Screenshot  *ui.ScreenshotClient
-	Recorder    *ui.Recorder
-	Input       *input.Client
-	Logs        *diagnostics.LogClient
-	Dumpsys     *diagnostics.DumpsysClient
-	Trace       *diagnostics.TraceClient
-	Files       *files.Client
-	Screen      *system.ScreenClient
-	Animations  *system.AnimationsClient
-	Doze        *system.DozeClient
-	Time        *system.TimeClient
-	Network     *system.NetworkClient
-	Location    *system.LocationClient
-	Maintenance *maintenance.Client
-	Tester      *apptest.Orchestrator
-	Intents     *apptest.IntentRecorder
+	Adb        *adb.Client
+	AndroidCLI *androidcli.Client
+	Resolver   *device.Resolver
+	Apps       *apps.Client
+	Layout     *ui.LayoutClient
+	Screenshot *ui.ScreenshotClient
+	Input      *input.Client
+	Logs       *diagnostics.LogClient
+	Screen     *system.ScreenClient
+	Animations *system.AnimationsClient
+	Tester     *apptest.Orchestrator
+	Intents    *apptest.IntentRecorder
 }
 
 // resolveDevice returns the chosen device's serial or an actionable error.

@@ -8,11 +8,16 @@ import (
 	"github.com/randheer094/velocity-mcp-mobile/internal/apps"
 )
 
-// RegisterApp registers app management & state tools.
+// RegisterApp exposes test setup/teardown and verification verbs over apps:
+// launch / terminate / clear-data, permission grant/revoke, intent dispatch
+// (deep-link tests), package metadata inspection, and run-as data inspection.
+//
+// APK install / uninstall is intentionally absent — those are deployment
+// concerns, not test code.
 func RegisterApp(s *mcp.Server, d *Deps) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "app_list",
-		Description: "List installed apps with launcher activities.",
+		Description: "List installed apps with launcher activities (find the app under test).",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, args DeviceArg) (*mcp.CallToolResult, any, error) {
 		dev, err := d.resolveDevice(ctx, args.Device)
@@ -26,44 +31,6 @@ func RegisterApp(s *mcp.Server, d *Deps) {
 		return jsonResult(list)
 	})
 
-	type installArgs struct {
-		DeviceArg
-		Path string `json:"path" jsonschema:"absolute path to an APK on the host"`
-	}
-	mcp.AddTool(s, &mcp.Tool{
-		Name:        "app_install",
-		Description: "Install an APK on the device. Prefers `android run --apks` when the agent CLI is available.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, args installArgs) (*mcp.CallToolResult, any, error) {
-		dev, err := d.resolveDevice(ctx, args.Device)
-		if err != nil {
-			return errResult(err)
-		}
-		out, err := d.Apps.Install(ctx, dev, args.Path)
-		if err != nil {
-			return errResult(err)
-		}
-		return textResult(out)
-	})
-
-	type uninstallArgs struct {
-		DeviceArg
-		Package string `json:"package" jsonschema:"the package name to uninstall"`
-	}
-	mcp.AddTool(s, &mcp.Tool{
-		Name:        "app_uninstall",
-		Description: "Uninstall an app from the device.",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: ptrTrue()},
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, args uninstallArgs) (*mcp.CallToolResult, any, error) {
-		dev, err := d.resolveDevice(ctx, args.Device)
-		if err != nil {
-			return errResult(err)
-		}
-		if err := d.Apps.Uninstall(ctx, dev, args.Package); err != nil {
-			return errResult(err)
-		}
-		return textResult("uninstalled " + args.Package)
-	})
-
 	type launchArgs struct {
 		DeviceArg
 		Package string `json:"package" jsonschema:"the package to launch"`
@@ -71,7 +38,7 @@ func RegisterApp(s *mcp.Server, d *Deps) {
 	}
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "app_launch",
-		Description: "Launch an app's main launcher activity, optionally with a per-app locale override.",
+		Description: "Launch the app's main launcher activity, optionally with a per-app locale override (test setup).",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, args launchArgs) (*mcp.CallToolResult, any, error) {
 		dev, err := d.resolveDevice(ctx, args.Device)
 		if err != nil {
@@ -89,7 +56,7 @@ func RegisterApp(s *mcp.Server, d *Deps) {
 	}
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "app_terminate",
-		Description: "Force-stop an app.",
+		Description: "Force-stop the app under test (test teardown).",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, args terminateArgs) (*mcp.CallToolResult, any, error) {
 		dev, err := d.resolveDevice(ctx, args.Device)
 		if err != nil {
@@ -107,7 +74,7 @@ func RegisterApp(s *mcp.Server, d *Deps) {
 	}
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "app_clear_data",
-		Description: "Wipe an app's user data (pm clear).",
+		Description: "Wipe an app's user data (pm clear) — standard test setup for a clean state.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: ptrTrue()},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, args clearArgs) (*mcp.CallToolResult, any, error) {
 		dev, err := d.resolveDevice(ctx, args.Device)
@@ -126,7 +93,7 @@ func RegisterApp(s *mcp.Server, d *Deps) {
 	}
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "app_get_info",
-		Description: "Return parsed `dumpsys package` info: version, target SDK, permissions (requested vs granted), install timestamps, etc.",
+		Description: "Return parsed `dumpsys package` info: version, target SDK, granted vs requested permissions, install timestamps. Useful for asserting the build under test.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, args infoArgs) (*mcp.CallToolResult, any, error) {
 		dev, err := d.resolveDevice(ctx, args.Device)
@@ -147,7 +114,7 @@ func RegisterApp(s *mcp.Server, d *Deps) {
 	}
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "permission_grant",
-		Description: "Grant a runtime permission to a package.",
+		Description: "Grant a runtime permission to a package (test setup).",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, args permArgs) (*mcp.CallToolResult, any, error) {
 		dev, err := d.resolveDevice(ctx, args.Device)
 		if err != nil {
@@ -160,7 +127,7 @@ func RegisterApp(s *mcp.Server, d *Deps) {
 	})
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "permission_revoke",
-		Description: "Revoke a runtime permission from a package.",
+		Description: "Revoke a runtime permission from a package (test setup).",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, args permArgs) (*mcp.CallToolResult, any, error) {
 		dev, err := d.resolveDevice(ctx, args.Device)
 		if err != nil {
@@ -177,7 +144,7 @@ func RegisterApp(s *mcp.Server, d *Deps) {
 		Mode     string            `json:"mode,omitempty" jsonschema:"start (default) or broadcast"`
 		Action   string            `json:"action,omitempty" jsonschema:"intent action, e.g. android.intent.action.VIEW"`
 		Category string            `json:"category,omitempty"`
-		Data     string            `json:"data,omitempty" jsonschema:"URI passed via -d, e.g. https://example.com or myapp://path"`
+		Data     string            `json:"data,omitempty" jsonschema:"URI passed via -d (deep link target)"`
 		Mime     string            `json:"mime,omitempty"`
 		Package  string            `json:"package,omitempty" jsonschema:"restrict to a specific package"`
 		Class    string            `json:"class,omitempty" jsonschema:"explicit component, e.g. com.example/.Main"`
@@ -189,7 +156,7 @@ func RegisterApp(s *mcp.Server, d *Deps) {
 	}
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "intent_send",
-		Description: "Dispatch an Android intent via `am start` / `am broadcast`. Supports deep links and typed extras.",
+		Description: "Dispatch an Android intent via `am start` / `am broadcast` (deep-link & broadcast tests).",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, args intentArgs) (*mcp.CallToolResult, any, error) {
 		dev, err := d.resolveDevice(ctx, args.Device)
 		if err != nil {
@@ -222,7 +189,7 @@ func RegisterApp(s *mcp.Server, d *Deps) {
 	}
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "app_data_list",
-		Description: "List files inside an app's private data dir using run-as. Requires a debuggable build.",
+		Description: "List files inside the app's private data dir using run-as. Requires a debuggable build. Useful for asserting cache/database state in tests.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, args appDataListArgs) (*mcp.CallToolResult, any, error) {
 		dev, err := d.resolveDevice(ctx, args.Device)
@@ -243,7 +210,7 @@ func RegisterApp(s *mcp.Server, d *Deps) {
 	}
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "app_data_read",
-		Description: "Read a file inside an app's private data dir using run-as. Requires a debuggable build.",
+		Description: "Read a file inside the app's private data dir using run-as. Requires a debuggable build.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, args appDataReadArgs) (*mcp.CallToolResult, any, error) {
 		dev, err := d.resolveDevice(ctx, args.Device)

@@ -89,6 +89,63 @@ func matchAtPath(item pathItem, flat []pathItem, m *Matcher) (bool, error) {
 		return ok, err
 	}
 
+	// Tree-position predicates (need the surrounding flat slice).
+	if m.IsRoot != nil {
+		isRoot := item.parent < 0
+		if isRoot != *m.IsRoot {
+			return false, nil
+		}
+	}
+	if m.ParentIndex != nil {
+		if item.parent < 0 {
+			return false, nil
+		}
+		// Position among the parent's direct children.
+		idx := -1
+		count := 0
+		for i, other := range flat {
+			if other.parent == item.parent {
+				if i == indexOf(item, flat) {
+					idx = count
+					break
+				}
+				count++
+			}
+		}
+		if idx != *m.ParentIndex {
+			return false, nil
+		}
+	}
+
+	// Visibility refinements relative to the root viewport.
+	if m.CompletelyDisplayed != nil || m.DisplayingAtLeastPercent > 0 {
+		root := flat[0].elem
+		visible := visibleArea(item.elem, root)
+		total := area(item.elem.Bounds)
+		if total == 0 {
+			if m.CompletelyDisplayed != nil && *m.CompletelyDisplayed {
+				return false, nil
+			}
+			if m.DisplayingAtLeastPercent > 0 {
+				return false, nil
+			}
+		} else {
+			if m.CompletelyDisplayed != nil {
+				want := *m.CompletelyDisplayed
+				got := visible == total
+				if got != want {
+					return false, nil
+				}
+			}
+			if m.DisplayingAtLeastPercent > 0 {
+				pct := 100 * visible / total
+				if pct < m.DisplayingAtLeastPercent {
+					return false, nil
+				}
+			}
+		}
+	}
+
 	// Hierarchy combinators.
 	if m.HasParent != nil {
 		if item.parent < 0 {
@@ -189,4 +246,33 @@ func isDescendantOf(flat []pathItem, i, ancestor int) bool {
 		}
 	}
 	return false
+}
+
+// area returns the rectangular area of bounds.
+func area(b ui.Bounds) int { return b.Width * b.Height }
+
+// visibleArea returns the area of the intersection between e's bounds and
+// root's bounds (used as the screen viewport).
+func visibleArea(e, root ui.Element) int {
+	x1 := max(e.Bounds.X, root.Bounds.X)
+	y1 := max(e.Bounds.Y, root.Bounds.Y)
+	x2 := min(e.Bounds.X+e.Bounds.Width, root.Bounds.X+root.Bounds.Width)
+	y2 := min(e.Bounds.Y+e.Bounds.Height, root.Bounds.Y+root.Bounds.Height)
+	if x2 <= x1 || y2 <= y1 {
+		return 0
+	}
+	return (x2 - x1) * (y2 - y1)
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

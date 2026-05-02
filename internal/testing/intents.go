@@ -100,6 +100,43 @@ type IntentAssertResult struct {
 	Reason string           `json:"reason,omitempty"`
 }
 
+// Stop ends the active recording window. List() will report "no intent
+// monitor active" until Start is called again.
+func (r *IntentRecorder) Stop(deviceID string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.sessions, deviceID)
+}
+
+// CountResult is returned by AssertCount.
+type CountResult struct {
+	OK       bool             `json:"ok"`
+	Count    int              `json:"count"`
+	Expected int              `json:"expected"`
+	All      []CapturedIntent `json:"all"`
+	Reason   string           `json:"reason,omitempty"`
+}
+
+// AssertCount reports whether the number of captured intents matching im
+// equals `expected` (Espresso `intended(matcher, times(n))`).
+func (r *IntentRecorder) AssertCount(ctx context.Context, deviceID string, im IntentMatcher, expected int) (CountResult, error) {
+	intents, err := r.List(ctx, deviceID)
+	if err != nil {
+		return CountResult{}, err
+	}
+	matched := []CapturedIntent{}
+	for _, it := range intents {
+		if intentMatches(it, im) {
+			matched = append(matched, it)
+		}
+	}
+	res := CountResult{Count: len(matched), Expected: expected, All: intents, OK: len(matched) == expected}
+	if !res.OK {
+		res.Reason = fmt.Sprintf("captured %d matching intent(s), expected %d", len(matched), expected)
+	}
+	return res, nil
+}
+
 // AssertSent reports whether at least one captured intent satisfies im.
 func (r *IntentRecorder) AssertSent(ctx context.Context, deviceID string, im IntentMatcher) (IntentAssertResult, error) {
 	intents, err := r.List(ctx, deviceID)
