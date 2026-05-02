@@ -26,8 +26,8 @@ run: build
 list-tools: build
 	./$(BINARY) --list-tools
 
-# install matches the convention used by randheer094/velocity: move the
-# built binary into $(INSTALL_DIR) (default ~/.local/bin). Override with:
+# install moves the built binary into $(INSTALL_DIR) (default ~/.local/bin).
+# Override with:
 #   make install INSTALL_DIR=/usr/local/bin
 install: build
 	mkdir -p $(INSTALL_DIR)
