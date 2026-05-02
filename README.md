@@ -30,12 +30,34 @@ If `android` is missing the server logs one warning and the affected tools fall 
 
 ## Install
 
+Both paths land the `velocity-test-mobile` binary in `~/.local/bin`. Make sure that directory is on `PATH`.
+
+### From a release (recommended)
+
+Pick the asset for your Mac and curl it straight into `~/.local/bin`:
+
+```bash
+mkdir -p ~/.local/bin
+
+# Apple Silicon (arm64)
+curl -L -o ~/.local/bin/velocity-test-mobile \
+  https://github.com/randheer094/velocity-test-mobile/releases/latest/download/velocity-test-mobile-macos-arm64
+
+# Intel Mac (x86_64)
+curl -L -o ~/.local/bin/velocity-test-mobile \
+  https://github.com/randheer094/velocity-test-mobile/releases/latest/download/velocity-test-mobile-macos-x86_64
+
+chmod +x ~/.local/bin/velocity-test-mobile
+```
+
+### From source
+
 ```bash
 git clone https://github.com/randheer094/velocity-test-mobile.git
 cd velocity-test-mobile
-make build                       # static binary
-./velocity-test-mobile --version
-./velocity-test-mobile --list-tools | wc -l   # 104
+make install                     # builds, then moves binary to ~/.local/bin
+velocity-test-mobile --version
+velocity-test-mobile --list-tools | wc -l   # 104
 ```
 
 ## Hooking up to a client

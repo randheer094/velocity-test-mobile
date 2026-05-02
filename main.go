@@ -33,10 +33,8 @@ import (
 	apptest "github.com/randheer094/velocity-test-mobile/internal/testing"
 	"github.com/randheer094/velocity-test-mobile/internal/tools"
 	"github.com/randheer094/velocity-test-mobile/internal/ui"
+	"github.com/randheer094/velocity-test-mobile/internal/version"
 )
-
-// version is overridable at build time via -ldflags.
-var version = "0.4.0"
 
 func main() {
 	listTools := flag.Bool("list-tools", false, "print the registered tool names and exit")
@@ -44,7 +42,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Println("velocity-test-mobile", version)
+		fmt.Println("velocity-test-mobile", version.String())
 		return
 	}
 	if *listTools {
@@ -96,7 +94,7 @@ func main() {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "velocity-test-mobile",
 		Title:   "Android Testing MCP Server",
-		Version: version,
+		Version: version.String(),
 	}, nil)
 	tools.RegisterAll(server, deps)
 
