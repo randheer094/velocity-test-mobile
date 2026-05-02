@@ -26,21 +26,28 @@ type Bounds struct {
 	Height int `json:"height"`
 }
 
-// Element is a single node in the UI hierarchy.
+// Element is a single node in the UI hierarchy. Field names align with
+// UIAutomator XML attributes and Compose semantics where applicable.
 type Element struct {
-	Class      string    `json:"class,omitempty"`
-	Text       string    `json:"text,omitempty"`
-	Label      string    `json:"label,omitempty"`
-	Hint       string    `json:"hint,omitempty"`
-	ResourceID string    `json:"resourceId,omitempty"`
-	Package    string    `json:"package,omitempty"`
-	Focused    bool      `json:"focused,omitempty"`
-	Checkable  bool      `json:"checkable,omitempty"`
-	Checked    bool      `json:"checked,omitempty"`
-	Clickable  bool      `json:"clickable,omitempty"`
-	Enabled    bool      `json:"enabled,omitempty"`
-	Bounds     Bounds    `json:"bounds"`
-	Children   []Element `json:"children,omitempty"`
+	Class         string    `json:"class,omitempty"`
+	Text          string    `json:"text,omitempty"`
+	Label         string    `json:"label,omitempty"` // content-desc
+	Hint          string    `json:"hint,omitempty"`
+	ResourceID    string    `json:"resourceId,omitempty"`
+	Package       string    `json:"package,omitempty"`
+	ErrorText     string    `json:"errorText,omitempty"`
+	Focused       bool      `json:"focused,omitempty"`
+	Focusable     bool      `json:"focusable,omitempty"`
+	Checkable     bool      `json:"checkable,omitempty"`
+	Checked       bool      `json:"checked,omitempty"`
+	Clickable     bool      `json:"clickable,omitempty"`
+	LongClickable bool      `json:"longClickable,omitempty"`
+	Scrollable    bool      `json:"scrollable,omitempty"`
+	Selected      bool      `json:"selected,omitempty"`
+	Enabled       bool      `json:"enabled,omitempty"`
+	VisibleToUser bool      `json:"visibleToUser,omitempty"`
+	Bounds        Bounds    `json:"bounds"`
+	Children      []Element `json:"children,omitempty"`
 }
 
 // Predicate is a matcher used by wait_for_element.
@@ -89,20 +96,26 @@ func (l *LayoutClient) fromAndroidCLI(ctx context.Context, deviceID string) (Ele
 // genericNode mirrors the JSON shape produced by `android layout --pretty`.
 // The exact schema isn't formally documented; we accept several aliases.
 type genericNode struct {
-	Class       string          `json:"class"`
-	Text        string          `json:"text"`
-	ContentDesc string          `json:"contentDesc"`
-	Description string          `json:"description"`
-	Hint        string          `json:"hint"`
-	ResourceID  string          `json:"resourceId"`
-	Package     string          `json:"package"`
-	Focused     bool            `json:"focused"`
-	Checkable   bool            `json:"checkable"`
-	Checked     bool            `json:"checked"`
-	Clickable   bool            `json:"clickable"`
-	Enabled     *bool           `json:"enabled"`
-	Bounds      json.RawMessage `json:"bounds"`
-	Children    []genericNode   `json:"children"`
+	Class         string          `json:"class"`
+	Text          string          `json:"text"`
+	ContentDesc   string          `json:"contentDesc"`
+	Description   string          `json:"description"`
+	Hint          string          `json:"hint"`
+	ResourceID    string          `json:"resourceId"`
+	Package       string          `json:"package"`
+	ErrorText     string          `json:"errorText"`
+	Focused       bool            `json:"focused"`
+	Focusable     bool            `json:"focusable"`
+	Checkable     bool            `json:"checkable"`
+	Checked       bool            `json:"checked"`
+	Clickable     bool            `json:"clickable"`
+	LongClickable bool            `json:"longClickable"`
+	Scrollable    bool            `json:"scrollable"`
+	Selected      bool            `json:"selected"`
+	Enabled       *bool           `json:"enabled"`
+	VisibleToUser *bool           `json:"visibleToUser"`
+	Bounds        json.RawMessage `json:"bounds"`
+	Children      []genericNode   `json:"children"`
 }
 
 func parseAndroidCLILayout(data []byte) (Element, error) {
@@ -118,23 +131,33 @@ func convertNode(n genericNode) Element {
 	if n.Enabled != nil {
 		enabled = *n.Enabled
 	}
+	visible := true
+	if n.VisibleToUser != nil {
+		visible = *n.VisibleToUser
+	}
 	label := n.ContentDesc
 	if label == "" {
 		label = n.Description
 	}
 	e := Element{
-		Class:      n.Class,
-		Text:       n.Text,
-		Label:      label,
-		Hint:       n.Hint,
-		ResourceID: n.ResourceID,
-		Package:    n.Package,
-		Focused:    n.Focused,
-		Checkable:  n.Checkable,
-		Checked:    n.Checked,
-		Clickable:  n.Clickable,
-		Enabled:    enabled,
-		Bounds:     parseBoundsJSON(n.Bounds),
+		Class:         n.Class,
+		Text:          n.Text,
+		Label:         label,
+		Hint:          n.Hint,
+		ResourceID:    n.ResourceID,
+		Package:       n.Package,
+		ErrorText:     n.ErrorText,
+		Focused:       n.Focused,
+		Focusable:     n.Focusable,
+		Checkable:     n.Checkable,
+		Checked:       n.Checked,
+		Clickable:     n.Clickable,
+		LongClickable: n.LongClickable,
+		Scrollable:    n.Scrollable,
+		Selected:      n.Selected,
+		Enabled:       enabled,
+		VisibleToUser: visible,
+		Bounds:        parseBoundsJSON(n.Bounds),
 	}
 	for _, c := range n.Children {
 		e.Children = append(e.Children, convertNode(c))
@@ -175,20 +198,25 @@ func parseBoundsJSON(raw json.RawMessage) Bounds {
 // uiautomator XML path -----------------------------------------------------
 
 type xmlNode struct {
-	XMLName     xml.Name  `xml:"node"`
-	Class       string    `xml:"class,attr"`
-	Text        string    `xml:"text,attr"`
-	ContentDesc string    `xml:"content-desc,attr"`
-	Hint        string    `xml:"hint,attr"`
-	ResourceID  string    `xml:"resource-id,attr"`
-	Package     string    `xml:"package,attr"`
-	Bounds      string    `xml:"bounds,attr"`
-	Focused     string    `xml:"focused,attr"`
-	Checkable   string    `xml:"checkable,attr"`
-	Checked     string    `xml:"checked,attr"`
-	Clickable   string    `xml:"clickable,attr"`
-	Enabled     string    `xml:"enabled,attr"`
-	Children    []xmlNode `xml:"node"`
+	XMLName       xml.Name  `xml:"node"`
+	Class         string    `xml:"class,attr"`
+	Text          string    `xml:"text,attr"`
+	ContentDesc   string    `xml:"content-desc,attr"`
+	Hint          string    `xml:"hint,attr"`
+	ResourceID    string    `xml:"resource-id,attr"`
+	Package       string    `xml:"package,attr"`
+	Bounds        string    `xml:"bounds,attr"`
+	Focused       string    `xml:"focused,attr"`
+	Focusable     string    `xml:"focusable,attr"`
+	Checkable     string    `xml:"checkable,attr"`
+	Checked       string    `xml:"checked,attr"`
+	Clickable     string    `xml:"clickable,attr"`
+	LongClickable string    `xml:"long-clickable,attr"`
+	Scrollable    string    `xml:"scrollable,attr"`
+	Selected      string    `xml:"selected,attr"`
+	Enabled       string    `xml:"enabled,attr"`
+	VisibleToUser string    `xml:"visible-to-user,attr"`
+	Children      []xmlNode `xml:"node"`
 }
 
 type xmlHierarchy struct {
@@ -250,18 +278,23 @@ func convertXMLRoot(h xmlHierarchy) Element {
 func convertXMLNode(n xmlNode) Element {
 	b, _ := parseBoundsString(n.Bounds)
 	e := Element{
-		Class:      n.Class,
-		Text:       n.Text,
-		Label:      n.ContentDesc,
-		Hint:       n.Hint,
-		ResourceID: n.ResourceID,
-		Package:    n.Package,
-		Focused:    n.Focused == "true",
-		Checkable:  n.Checkable == "true",
-		Checked:    n.Checked == "true",
-		Clickable:  n.Clickable == "true",
-		Enabled:    n.Enabled == "true" || n.Enabled == "",
-		Bounds:     b,
+		Class:         n.Class,
+		Text:          n.Text,
+		Label:         n.ContentDesc,
+		Hint:          n.Hint,
+		ResourceID:    n.ResourceID,
+		Package:       n.Package,
+		Focused:       n.Focused == "true",
+		Focusable:     n.Focusable == "true",
+		Checkable:     n.Checkable == "true",
+		Checked:       n.Checked == "true",
+		Clickable:     n.Clickable == "true",
+		LongClickable: n.LongClickable == "true",
+		Scrollable:    n.Scrollable == "true",
+		Selected:      n.Selected == "true",
+		Enabled:       n.Enabled == "true" || n.Enabled == "",
+		VisibleToUser: n.VisibleToUser == "true" || n.VisibleToUser == "",
+		Bounds:        b,
 	}
 	for _, c := range n.Children {
 		e.Children = append(e.Children, convertXMLNode(c))
