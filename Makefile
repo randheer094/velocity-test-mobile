@@ -26,22 +26,12 @@ run: build
 list-tools: build
 	./$(BINARY) --list-tools
 
-# install copies the built binary to $(INSTALL_DIR) (default ~/.local/bin).
-# Override the destination by setting INSTALL_DIR, e.g.:
+# install matches the convention used by randheer094/velocity: move the
+# built binary into $(INSTALL_DIR) (default ~/.local/bin). Override with:
 #   make install INSTALL_DIR=/usr/local/bin
 install: build
-	@mkdir -p "$(INSTALL_DIR)"
-	install -m 0755 $(BINARY) "$(INSTALL_DIR)/$(BINARY)"
-	@echo
-	@echo "Installed: $(INSTALL_DIR)/$(BINARY)"
-	@case ":$$PATH:" in \
-	  *":$(INSTALL_DIR):"*) \
-	    echo "OK: $(INSTALL_DIR) is already on your PATH." ;; \
-	  *) \
-	    echo "Note: $(INSTALL_DIR) is NOT on your PATH."; \
-	    echo "      Add to your shell profile, e.g.:"; \
-	    echo "        echo 'export PATH=\"$(INSTALL_DIR):\$$PATH\"' >> ~/.bashrc" ;; \
-	esac
+	mkdir -p $(INSTALL_DIR)
+	mv $(BINARY) $(INSTALL_DIR)/$(BINARY)
 
 uninstall:
 	rm -f "$(INSTALL_DIR)/$(BINARY)"
