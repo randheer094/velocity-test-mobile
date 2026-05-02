@@ -22,18 +22,23 @@ import (
 
 // Deps bundles every shared client used by tool handlers.
 type Deps struct {
-	Adb        *adb.Client
-	AndroidCLI *androidcli.Client
-	Resolver   *device.Resolver
-	Apps       *apps.Client
-	Layout     *ui.LayoutClient
-	Screenshot *ui.ScreenshotClient
-	Input      *input.Client
-	Logs       *diagnostics.LogClient
-	Screen     *system.ScreenClient
-	Animations *system.AnimationsClient
-	Tester     *apptest.Orchestrator
-	Intents    *apptest.IntentRecorder
+	Adb           *adb.Client
+	AndroidCLI    *androidcli.Client
+	Resolver      *device.Resolver
+	Apps          *apps.Client
+	Layout        *ui.LayoutClient
+	Screenshot    *ui.ScreenshotClient
+	Input         *input.Client
+	Logs          *diagnostics.LogClient
+	Screen        *system.ScreenClient
+	Animations    *system.AnimationsClient
+	Activity      *system.ActivityClient
+	Service       *system.ServiceClient
+	Location      *system.LocationClient
+	Notifications *system.NotificationClient
+	Shell         *system.ShellClient
+	Tester        *apptest.Orchestrator
+	Intents       *apptest.IntentRecorder
 }
 
 // resolveDevice returns the chosen device's serial or an actionable error.

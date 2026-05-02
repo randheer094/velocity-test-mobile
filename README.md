@@ -2,7 +2,7 @@
 
 An **Android testing** [Model Context Protocol](https://modelcontextprotocol.io) server, written in Go.
 
-The server exposes **Espresso** ViewMatchers/ViewActions/ViewAssertions and **Jetpack Compose** test verbs (`onNodeWithText`, `assertIsDisplayed`, `performClick`, `waitUntilExists`, …) as **92 MCP tools** an LLM agent can call directly. Each tool takes a shared **matcher** object — the same vocabulary across find / assert / act / wait — so an agent's prompt of *"verify Login is visible; click Continue; wait for Welcome"* maps to three self-contained tool calls with no element handles to thread.
+The server exposes **Espresso** ViewMatchers/ViewActions/ViewAssertions and **Jetpack Compose** test verbs (`onNodeWithText`, `assertIsDisplayed`, `performClick`, `waitUntilExists`, …) as **104 MCP tools** an LLM agent can call directly. Each tool takes a shared **matcher** object — the same vocabulary across find / assert / act / wait — so an agent's prompt of *"verify Login is visible; click Continue; wait for Welcome"* maps to three self-contained tool calls with no element handles to thread.
 
 Internally the server walks the device's accessibility tree (UIAutomator XML or Google's [`android` agent CLI](https://developer.android.com/tools/agents/android-cli) JSON), applies the matcher, and dispatches `adb shell input` actions. **No in-process instrumentation** — no companion APK, no Espresso runtime on the device.
 
@@ -35,7 +35,7 @@ git clone https://github.com/randheer094/velocity-mcp-mobile.git
 cd velocity-mcp-mobile
 make build                       # static binary
 ./velocity-mcp-mobile --version
-./velocity-mcp-mobile --list-tools | wc -l   # 92
+./velocity-mcp-mobile --list-tools | wc -l   # 104
 ```
 
 ## Hooking up to a client
@@ -127,7 +127,7 @@ Every assert / act / wait tool takes a `match` selector with the same JSON shape
 
 See [`docs/MATCHERS.md`](docs/MATCHERS.md) for the field-by-field reference and [`docs/EXAMPLES.md`](docs/EXAMPLES.md) for realistic flows.
 
-## Tools at a glance (92)
+## Tools at a glance (104)
 
 | Group | Examples |
 | --- | --- |
@@ -142,7 +142,8 @@ See [`docs/MATCHERS.md`](docs/MATCHERS.md) for the field-by-field reference and 
 | **Sync** | `wait_until_visible`, `wait_until_not_visible`, `wait_until_text`, `wait_until_count`, `wait_until_at_least_one_exists`, `wait_for_idle` |
 | **Espresso top-level** | `espresso_press_back`, `press_back_unconditionally`, `close_soft_keyboard`, `open_overflow_menu`, `open_contextual_action_mode_menu` |
 | **Intents (recording-only)** | `intent_monitor_start`, `intent_monitor_stop`, `intent_list_captured`, `assert_intent_sent`, `assert_intent_count` |
-| **Test fixtures** | `device_list`, `device_get_screen_size`, `device_get_props`, `device_get_orientation`, `device_set_orientation`, `animations_set`, `animations_get`, `app_list`, `app_launch`, `app_terminate`, `app_clear_data`, `app_get_info`, `permission_grant`, `permission_revoke`, `intent_send`, `app_data_list`, `app_data_read`, `screen_capture`, `screen_layout`, `screen_resolve`, `screen_diff`, `clipboard_get`, `clipboard_set`, `press_key`, `type_into_focused`, `logcat_tail`, `logcat_clear` |
+| **Test fixtures** | `device_list`, `device_get_screen_size`, `device_get_props`, `device_get_orientation`, `device_set_orientation`, `animations_set`, `animations_get`, `app_list`, `app_launch`, `app_terminate`, `app_clear_data`, `app_get_info`, `permission_grant`, `permission_revoke`, `appops_set`, `appops_get`, `intent_send`, `app_data_list`, `app_data_read`, `screen_capture`, `screen_layout`, `screen_resolve`, `screen_diff`, `clipboard_get`, `clipboard_set`, `press_key`, `type_into_focused`, `logcat_tail`, `logcat_clear` |
+| **Activity / service / location / shell** | `activity_get_top`, `activity_wait_for_top`, `activity_start`, `service_get_state`, `service_wait_for_state`, `location_get_last_known`, `notification_list`, `notification_shade_set`, `notification_tap`, `shell_exec` |
 
 Full reference in [`docs/TOOLS.md`](docs/TOOLS.md).
 

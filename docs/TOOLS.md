@@ -1,6 +1,6 @@
 # Tool reference
 
-92 tools, grouped by purpose. Every device-targeted tool accepts an optional `device` argument (omit when only one device is connected). Every matcher-bearing tool takes a `match` object — see [MATCHERS.md](MATCHERS.md) for the field reference.
+104 tools, grouped by purpose. Every device-targeted tool accepts an optional `device` argument (omit when only one device is connected). Every matcher-bearing tool takes a `match` object — see [MATCHERS.md](MATCHERS.md) for the field reference.
 
 ## Conventions
 
@@ -29,14 +29,34 @@
 | --- | --- | --- | --- |
 | `app_list` | yes | — | Apps with launcher activities, parsed from `cmd package query-activities`. |
 | `app_launch` | no | `package`, `locale?` | `monkey` to launch; optional `cmd locale set-app-locales`. |
-| `app_terminate` | no | `package` | `am force-stop`. |
+| `app_terminate` | no | `package`, `kind?` (`force_stop` default / `kill`) | `am force-stop` (default) or `am kill`. Use `kill` to simulate process reclamation while keeping the package eligible for service restart and broadcasts (e.g. `START_STICKY` testing). |
 | `app_clear_data` | no (destructive) | `package` | `pm clear`. |
 | `app_get_info` | yes | `package` | Parsed `dumpsys package`: `versionName`, `versionCode`, `targetSdk`, `minSdk`, `firstInstallTime`, `lastUpdateTime`, requested vs granted permissions, signers. |
 | `permission_grant` | no | `package`, `permission` | `pm grant`. |
 | `permission_revoke` | no | `package`, `permission` | `pm revoke`. |
-| `intent_send` | no | `mode?` (`start`/`broadcast`), `action?`, `category?`, `data?` (URI), `mime?`, `package?`, `class?` (`pkg/.Class`), `flags?: []`, `stringExtras?`, `intExtras?`, `boolExtras?`, `floatExtras?` | `am start`/`am broadcast`. Inputs are validated against safe regexes. |
+| `appops_set` | no | `package`, `op`, `mode` (`allow`/`deny`/`ignore`/`default`) | `appops set`. Distinct from runtime permissions — covers system-level grants like `android:mock_location` that `permission_grant` can't reach. |
+| `appops_get` | yes | `package`, `op` | `appops get`. Returns `default` when the op is not explicitly set. |
+| `intent_send` | no | `mode?` (`start`/`broadcast`/`service`/`foreground_service`), `action?`, `category?`, `data?` (URI), `mime?`, `package?`, `class?` (`pkg/.Class`), `flags?: []`, `stringExtras?`, `intExtras?`, `boolExtras?`, `floatExtras?` | `am start`/`broadcast`/`start-service`/`start-foreground-service`. Inputs are validated against safe regexes. |
 | `app_data_list` | yes | `package`, `relativePath?` | `run-as <pkg> ls -la`. Requires a debuggable build. |
 | `app_data_read` | yes | `package`, `relativePath` | `run-as <pkg> cat`. Path validated against `..` traversal. |
+
+## Activity, service, location, notification & shell introspection
+
+These wrap the `dumpsys` services and `cmd statusbar` so runbooks can stay
+inside the MCP contract instead of falling back to `Bash` for `adb shell`.
+
+| Tool | Read-only | Args | Behaviour |
+| --- | --- | --- | --- |
+| `activity_get_top` | yes | — | Returns `{ bundle_id, activity, task_id? }` from `dumpsys activity activities` (`topResumedActivity`). Returns null when no activity is resumed. |
+| `activity_wait_for_top` | yes | `bundle_id`, `activity?`, `timeout_ms?` | Poll until the resumed activity matches; `activity` accepts FQN or relative form (`.MainActivity`). |
+| `activity_start` | no | `bundle_id`, `activity`, `action?`, `data?`, `flags?`, `stringExtras?`, `intExtras?`, `boolExtras?`, `floatExtras?` | `am start -n <pkg>/<activity>`. Bypasses launcher resolution — use when `monkey -c LAUNCHER` picks the wrong activity (e.g. LeakCanary). |
+| `service_get_state` | yes | `bundle_id`, `component?` | Parsed `dumpsys activity services <pkg>`: `{ running, foreground, component, notification_id?, start_id?, last_intent_action? }`. |
+| `service_wait_for_state` | yes | `bundle_id`, `component?`, `running?`, `foreground?`, `timeout_ms?` | Poll variant of `service_get_state` — wait until every set field matches. |
+| `location_get_last_known` | yes | `provider?` (`gps`/`network`/`passive`/`fused`) | Parses `last location=Location[<provider> <lat>,<lng> ...]` from `dumpsys location`. Returns null when no fix is reported. |
+| `notification_list` | yes | `bundle_id?`, `channel_id?` | Parsed `dumpsys notification --noredact`: `[{ bundle_id, channel_id, title, text, ongoing, posted_time_ms, tag, id }]`. |
+| `notification_shade_set` | no | `state` (`expanded`/`collapsed`/`quick_settings`) | `cmd statusbar expand-notifications` / `collapse` / `expand-settings`. |
+| `notification_tap` | no | `bundle_id`, `channel_id?`, `title_match?` | Higher-level convenience: opens the shade, finds a matching notification by title/text via the testing matcher, clicks it, collapses the shade. |
+| `shell_exec` | no | `command`, `timeout_ms?` (default 10000) | Documented backstop for arbitrary `adb shell <command>`. Returns `{ stdout, stderr, exit_code }` regardless of exit status. Prefer the typed wrappers above; reach for this only for one-off introspection (new dumpsys services, debug-only setprop). |
 
 ## Screen capture & visual regression
 
