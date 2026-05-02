@@ -18,6 +18,7 @@ import (
 	"github.com/randheer094/velocity-mcp-mobile/internal/input"
 	"github.com/randheer094/velocity-mcp-mobile/internal/maintenance"
 	"github.com/randheer094/velocity-mcp-mobile/internal/system"
+	apptest "github.com/randheer094/velocity-mcp-mobile/internal/testing"
 	"github.com/randheer094/velocity-mcp-mobile/internal/ui"
 )
 
@@ -42,6 +43,8 @@ type Deps struct {
 	Network     *system.NetworkClient
 	Location    *system.LocationClient
 	Maintenance *maintenance.Client
+	Tester      *apptest.Orchestrator
+	Intents     *apptest.IntentRecorder
 }
 
 // resolveDevice returns the chosen device's serial or an actionable error.
@@ -86,6 +89,33 @@ func errResult(err error) (*mcp.CallToolResult, any, error) {
 // ptrTrue / ptrFalse for the tool annotation pointer fields.
 func ptrTrue() *bool  { v := true; return &v }
 func ptrFalse() *bool { v := false; return &v }
+
+// Direct-form helpers for Server.AddTool (non-generic) — return a single
+// *mcp.CallToolResult instead of the 3-tuple expected by the generic AddTool.
+func jsonResultDirect(v any) *mcp.CallToolResult {
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return &mcp.CallToolResult{
+			IsError: true,
+			Content: []mcp.Content{&mcp.TextContent{Text: "marshal error: " + err.Error()}},
+		}
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(b)}}}
+}
+
+func textResultDirect(text string) *mcp.CallToolResult {
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: text}}}
+}
+
+func errResultDirect(err error) *mcp.CallToolResult {
+	if err == nil {
+		err = errors.New("unknown error")
+	}
+	return &mcp.CallToolResult{
+		IsError: true,
+		Content: []mcp.Content{&mcp.TextContent{Text: err.Error()}},
+	}
+}
 
 // Common types reused by many handlers ----------------------------------
 

@@ -15,6 +15,7 @@ func RegisterAll(s *mcp.Server, d *Deps) {
 	RegisterSystem(s, d)
 	RegisterMaintenance(s, d)
 	RegisterDocs(s, d)
+	RegisterTesting(s, d)
 }
 
 // Catalog returns a static list of tool names registered by RegisterAll.
@@ -49,5 +50,24 @@ func Catalog() []string {
 		"device_reboot", "wireless_enable", "wireless_connect", "wireless_pair", "wireless_disconnect",
 		// docs
 		"docs_search", "docs_fetch",
+		// testing — finders / debug
+		"find_node", "find_all_nodes", "count_nodes", "print_tree",
+		// testing — assertions
+		"assert_visible", "assert_not_visible", "assert_exists", "assert_does_not_exist",
+		"assert_clickable", "assert_enabled", "assert_disabled", "assert_focused",
+		"assert_selected", "assert_checked", "assert_unchecked",
+		"assert_text_equals", "assert_text_contains", "assert_content_description_equals",
+		"assert_count_equals", "assert_has_descendant",
+		// testing — actions
+		"click", "double_click", "long_click",
+		"type_text", "replace_text", "clear_text", "submit_text",
+		"swipe_node", "scroll_to", "perform_ime_action",
+		"assert_clickable_and_click",
+		// testing — synchronization
+		"wait_until_visible", "wait_until_not_visible", "wait_until_text", "wait_until_count", "wait_for_idle",
+		// testing — espresso conveniences
+		"espresso_press_back", "close_soft_keyboard", "open_overflow_menu",
+		// testing — intents (recording-only)
+		"intent_monitor_start", "intent_list_captured", "assert_intent_sent",
 	}
 }

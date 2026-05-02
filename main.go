@@ -29,6 +29,7 @@ import (
 	"github.com/randheer094/velocity-mcp-mobile/internal/maintenance"
 	"github.com/randheer094/velocity-mcp-mobile/internal/runner"
 	"github.com/randheer094/velocity-mcp-mobile/internal/system"
+	apptest "github.com/randheer094/velocity-mcp-mobile/internal/testing"
 	"github.com/randheer094/velocity-mcp-mobile/internal/tools"
 	"github.com/randheer094/velocity-mcp-mobile/internal/ui"
 )
@@ -87,6 +88,10 @@ func main() {
 		Location:    system.NewLocationClient(adbClient),
 		Maintenance: maintenance.New(adbClient),
 	}
+	// Testing surface (Espresso/Compose-style verbs) is layered on top of
+	// the existing layout + input clients.
+	deps.Tester = apptest.New(deps.Layout, deps.Input)
+	deps.Intents = apptest.NewIntentRecorder(deps.Logs)
 
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "android-mcp",

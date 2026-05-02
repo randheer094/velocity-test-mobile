@@ -1,6 +1,8 @@
 # velocity-mcp-mobile
 
-An **Android-only** [Model Context Protocol](https://modelcontextprotocol.io) server, written in Go, that gives an LLM agent everything it needs to drive, observe, and verify an Android app on a device or emulator.
+An **Android-only** [Model Context Protocol](https://modelcontextprotocol.io) server, written in Go, that gives an LLM agent everything it needs to drive, observe, and **verify** an Android app on a device or emulator.
+
+The agent calls **Espresso- and Compose-test-style verbs** like `assert_visible({text:"Login"})` and `click({testTag:"submitBtn"})`. Internally the server walks the device's accessibility tree and dispatches `adb shell input` actions — no in-process instrumentation required.
 
 Inspired by [`mobile-next/mobile-mcp`](https://github.com/mobile-next/mobile-mcp). Differences:
 
@@ -8,6 +10,7 @@ Inspired by [`mobile-next/mobile-mcp`](https://github.com/mobile-next/mobile-mcp
 - **No telemetry**, no phone-home — fully local.
 - **Single static Go binary**, sub-10ms cold start, no Node/Python runtime.
 - Prefers Google's new agent CLI ([`android`](https://developer.android.com/tools/agents/android-cli)) where it offers something cleaner; falls back to `adb` everywhere else.
+- **First-class testing surface** — Espresso ViewMatchers + ViewActions + ViewAssertions and Compose finders/actions/assertions exposed as MCP tools, including `wait_until_visible`, `wait_for_idle`, `scroll_to`, and recording-only `assert_intent_sent`.
 - Wider verification surface — pixel diffs, perfetto/atrace, animations control, doze simulation, network/airplane/Wi-Fi/data toggles, time/timezone, mock GPS, app-data inspection (run-as), wireless ADB, and more.
 
 ## Runtime requirements
@@ -58,7 +61,60 @@ npx @modelcontextprotocol/inspector ./velocity-mcp-mobile
 
 ## Tool surface
 
-The server exposes ~65 tools. Use `--list-tools` to print the canonical names. Highlights:
+The server exposes **~107 tools** in two layers — a low-level device-driving layer and a high-level testing layer. Use `--list-tools` to print the canonical names.
+
+### Testing layer (Espresso / Compose-style)
+
+Every testing tool takes a shared **matcher** object — the same vocabulary across find / assert / act / wait. Recursive combinators (`hasAncestor`, `hasDescendant`, `not`, `allOf`, `anyOf`) are exposed via JSON Schema `$ref`.
+
+```jsonc
+// Matcher fields (any combination)
+{
+  "text": "Login",                 // exact
+  "textContains": "ogi",           // substring
+  "textRegex": "^Log",             // Go regex
+  "contentDescription": "...",
+  "resourceId": "loginBtn",        // accepts suffix or fully-qualified id
+  "testTag": "loginBtn",           // Compose testTag (works with testTagsAsResourceId)
+  "className": "Button",           // substring
+  "clickable": true, "enabled": true, "checked": false,  // state filters (any subset)
+  "displayed": true,
+  "hasAncestor": { "scrollable": true },
+  "hasDescendant": { "text": "Item 1" },
+  "not": { "className": "Disabled" },
+  "instance": 0                    // pick the Nth match
+}
+```
+
+| Group | Tools |
+| --- | --- |
+| **Find** | `find_node`, `find_all_nodes`, `count_nodes`, `print_tree` |
+| **Assert** (read-only) | `assert_visible`, `assert_not_visible`, `assert_exists`, `assert_does_not_exist`, `assert_clickable`, `assert_enabled`, `assert_disabled`, `assert_focused`, `assert_selected`, `assert_checked`, `assert_unchecked`, `assert_text_equals`, `assert_text_contains`, `assert_content_description_equals`, `assert_count_equals`, `assert_has_descendant` |
+| **Act** | `click`, `double_click`, `long_click`, `type_text`, `replace_text`, `clear_text`, `submit_text`, `swipe_node`, `scroll_to`, `perform_ime_action`, `assert_clickable_and_click` |
+| **Sync** | `wait_until_visible`, `wait_until_not_visible`, `wait_until_text`, `wait_until_count`, `wait_for_idle` (poll-and-hash heuristic) |
+| **Espresso conveniences** | `espresso_press_back`, `close_soft_keyboard`, `open_overflow_menu` |
+| **Intents (recording-only)** | `intent_monitor_start`, `intent_list_captured`, `assert_intent_sent` — scrapes ActivityManager logcat. Stubbing (`intending().respondWith()`) is **not** possible without instrumentation. |
+
+The user's pattern *"verify X is visible; verify Y is clickable and click Y"* maps directly:
+
+```jsonc
+{ "tool": "assert_visible",            "args": { "match": { "text": "Welcome" } } }
+{ "tool": "assert_clickable_and_click","args": { "match": { "text": "Continue" } } }
+```
+
+#### Caveats vs. the real frameworks
+
+| Capability | Behaviour here |
+| --- | --- |
+| Compose `testTag` | Works when the app sets `Modifier.semantics { testTagsAsResourceId = true }` (then matched via `resourceId`/`testTag`); otherwise fall back to `contentDescription` / `text`. |
+| `IdlingResource` / `onIdle()` | Approximated by `wait_for_idle` — polls the tree and returns when two snapshots hash identically over an idle window. No in-process hook. |
+| `mainClock.advanceTimeBy(...)` | Not supported (in-process only). |
+| Espresso `intending()` stubbing | Not supported. `assert_intent_sent` reads dispatched intents from logcat. |
+| `assertWidthIsEqualTo(dp)` | Not exposed — bounds are returned in pixels; convert via `device_get_screen_size` density if needed. |
+
+### Lower-level device-driving layer
+
+Highlights of the underlying surface (the testing layer is layered on top of these):
 
 | Category | Tools |
 | --- | --- |
