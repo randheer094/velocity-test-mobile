@@ -23,6 +23,7 @@ func RegisterSystem(s *mcp.Server, d *Deps) {
 	registerService(s, d)
 	registerLocation(s, d)
 	registerNotifications(s, d)
+	registerSystemState(s, d)
 	registerShellExec(s, d)
 }
 
@@ -305,6 +306,151 @@ func registerNotifications(s *mcp.Server, d *Deps) {
 		}
 		_ = d.Notifications.SetShade(ctx, dev, system.ShadeCollapsed)
 		return jsonResult(res)
+	})
+}
+
+func registerSystemState(s *mcp.Server, d *Deps) {
+	type fontScaleArgs struct {
+		DeviceArg
+		Scale float64 `json:"scale" jsonschema:"font scale; 1.0 is default, 1.3 = large, 0.85 = small, max 2.5"`
+	}
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "device_set_font_scale",
+		Description: "Override the system font scale for accessibility/large-text regression tests. Persists across screens and survives until set again or the device reboots.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, args fontScaleArgs) (*mcp.CallToolResult, any, error) {
+		dev, err := d.resolveDevice(ctx, args.Device)
+		if err != nil {
+			return errResult(err)
+		}
+		if err := d.State.SetFontScale(ctx, dev, args.Scale); err != nil {
+			return errResult(err)
+		}
+		return jsonResult(map[string]any{"ok": true, "scale": args.Scale})
+	})
+
+	type darkModeArgs struct {
+		DeviceArg
+		Mode string `json:"mode" jsonschema:"yes (dark) | no (light) | auto (follow schedule)"`
+	}
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "device_set_dark_mode",
+		Description: "Force the system UI dark mode. Wraps `cmd uimode night yes|no|auto`.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, args darkModeArgs) (*mcp.CallToolResult, any, error) {
+		dev, err := d.resolveDevice(ctx, args.Device)
+		if err != nil {
+			return errResult(err)
+		}
+		if err := d.State.SetDarkMode(ctx, dev, args.Mode); err != nil {
+			return errResult(err)
+		}
+		return jsonResult(map[string]any{"ok": true, "mode": args.Mode})
+	})
+
+	type onArgs struct {
+		DeviceArg
+		On bool `json:"on"`
+	}
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "airplane_mode_set",
+		Description: "Toggle airplane mode via `cmd connectivity airplane-mode enable|disable`. On older Android versions this command may not exist; the error surfaces verbatim.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, args onArgs) (*mcp.CallToolResult, any, error) {
+		dev, err := d.resolveDevice(ctx, args.Device)
+		if err != nil {
+			return errResult(err)
+		}
+		if err := d.State.SetAirplaneMode(ctx, dev, args.On); err != nil {
+			return errResult(err)
+		}
+		return jsonResult(map[string]any{"ok": true, "on": args.On})
+	})
+
+	type batteryArgs struct {
+		DeviceArg
+		Reset    bool `json:"reset,omitempty" jsonschema:"if true, clear all overrides via 'dumpsys battery reset' and ignore other fields"`
+		Level    int  `json:"level,omitempty" jsonschema:"battery percentage 0..100; omit/zero leaves it untouched"`
+		Status   int  `json:"status,omitempty" jsonschema:"BatteryManager status code: 1 unknown · 2 charging · 3 discharging · 4 not_charging · 5 full"`
+		AC       int  `json:"ac,omitempty" jsonschema:"AC plugged: 1 unplugged | 2 plugged"`
+		USB      int  `json:"usb,omitempty" jsonschema:"USB plugged: 1 unplugged | 2 plugged"`
+		Wireless int  `json:"wireless,omitempty" jsonschema:"wireless plugged: 1 unplugged | 2 plugged"`
+	}
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "battery_set_state",
+		Description: "Override battery state via `dumpsys battery set ...` for low-power-mode and charging-indicator tests. Always pair test-time overrides with `reset: true` in cleanup; otherwise the device reports fake state until reboot.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, args batteryArgs) (*mcp.CallToolResult, any, error) {
+		dev, err := d.resolveDevice(ctx, args.Device)
+		if err != nil {
+			return errResult(err)
+		}
+		if args.Reset {
+			if err := d.State.BatteryReset(ctx, dev); err != nil {
+				return errResult(err)
+			}
+			return jsonResult(map[string]any{"ok": true, "reset": true})
+		}
+		st := system.BatteryState{Level: -1}
+		if args.Level > 0 || args.Level == 0 && args.Status == 0 && args.AC == 0 && args.USB == 0 && args.Wireless == 0 {
+			// 0 with no other fields would be ambiguous — reject up-front.
+		}
+		st.Level = args.Level
+		if args.Level == 0 {
+			st.Level = -1
+		}
+		st.Status = args.Status
+		st.AC = args.AC
+		st.USB = args.USB
+		st.Wireless = args.Wireless
+		if err := d.State.SetBattery(ctx, dev, st); err != nil {
+			return errResult(err)
+		}
+		return jsonResult(map[string]any{"ok": true, "level": args.Level, "status": args.Status, "ac": args.AC, "usb": args.USB, "wireless": args.Wireless})
+	})
+
+	type networkArgs struct {
+		DeviceArg
+		Wifi   *bool `json:"wifi,omitempty"`
+		Mobile *bool `json:"mobile,omitempty"`
+	}
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "network_set",
+		Description: "Toggle wifi / mobile-data radios via `svc wifi enable|disable` and `svc data enable|disable`. Set only the radios you want to change.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, args networkArgs) (*mcp.CallToolResult, any, error) {
+		dev, err := d.resolveDevice(ctx, args.Device)
+		if err != nil {
+			return errResult(err)
+		}
+		if args.Wifi == nil && args.Mobile == nil {
+			return errResult(fmt.Errorf("network_set: at least one of wifi/mobile must be set"))
+		}
+		if args.Wifi != nil {
+			if err := d.State.SetWifi(ctx, dev, *args.Wifi); err != nil {
+				return errResult(err)
+			}
+		}
+		if args.Mobile != nil {
+			if err := d.State.SetMobileData(ctx, dev, *args.Mobile); err != nil {
+				return errResult(err)
+			}
+		}
+		return jsonResult(map[string]any{"ok": true})
+	})
+
+	type appLocaleArgs struct {
+		DeviceArg
+		Package string `json:"package"`
+		Tag     string `json:"tag,omitempty" jsonschema:"BCP-47 locale tag (e.g. ja-JP, fr-CA). Omit or empty to clear the override."`
+	}
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "app_set_locale",
+		Description: "Apply a per-app locale override via `cmd locale set-app-locales`. Distinct from `app_launch.locale`, which sets locale only for the next launch — `app_set_locale` persists until cleared.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, args appLocaleArgs) (*mcp.CallToolResult, any, error) {
+		dev, err := d.resolveDevice(ctx, args.Device)
+		if err != nil {
+			return errResult(err)
+		}
+		if err := d.State.SetAppLocale(ctx, dev, args.Package, args.Tag); err != nil {
+			return errResult(err)
+		}
+		return jsonResult(map[string]any{"ok": true, "package": args.Package, "tag": args.Tag})
 	})
 }
 
