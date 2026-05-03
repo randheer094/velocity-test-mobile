@@ -344,6 +344,27 @@ func (o *Orchestrator) SlowSwipeNode(ctx context.Context, deviceID string, m *ma
 	return o.SwipeNode(ctx, deviceID, m, direction, 1500)
 }
 
+// DragNode drags the centre of the `from` matcher to the centre of the `to`
+// matcher. Useful for reorderable lists, drag-and-drop, and slider thumbs
+// where direction-based SwipeNode isn't enough. Implemented as a single
+// `input swipe` from one centre to the other with a default 600ms duration.
+func (o *Orchestrator) DragNode(ctx context.Context, deviceID string, from, to *matcher.Matcher, durationMs int) (ActionResult, error) {
+	src, _, err := o.fetchAndFind(ctx, deviceID, from)
+	if err != nil {
+		return ActionResult{Reason: "from: " + err.Error()}, err
+	}
+	dst, _, err := o.fetchAndFind(ctx, deviceID, to)
+	if err != nil {
+		return ActionResult{Element: &src, Reason: "to: " + err.Error()}, err
+	}
+	fx, fy := CenterOf(src)
+	tx, ty := CenterOf(dst)
+	if err := o.Input.Drag(ctx, deviceID, fx, fy, tx, ty, durationMs); err != nil {
+		return ActionResult{Element: &src, X: tx, Y: ty, Reason: err.Error()}, err
+	}
+	return ActionResult{OK: true, Element: &src, X: tx, Y: ty}, nil
+}
+
 // ScrollToIndex — Compose performScrollToIndex(idx).
 //
 // LazyColumn/Row item indexing is opaque from outside the app, so this is
