@@ -18,6 +18,7 @@ Internally the server walks the device's accessibility tree (UIAutomator XML or 
 | **[`docs/TOOLS.md`](docs/TOOLS.md)** | Every tool, its arguments, and what it maps to in Espresso/Compose. |
 | **[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)** | How the server is structured: layered packages, request flow, sync model, failure modes. |
 | **[`docs/EXAMPLES.md`](docs/EXAMPLES.md)** | Realistic test flows expressed as MCP tool calls — login, list scrolling, deep-link assertions, visual regression, sibling correctness. |
+| **[`examples/sample-skill/`](examples/sample-skill/)** | A complete worked Markdown-runbook skill — preflight, fixtures for preparation and teardown, three sample tests — written in the human-friendly prose style backed by a verb→tool vocabulary. |
 
 ## Runtime requirements
 
