@@ -78,6 +78,7 @@ func main() {
 		Screenshot:    ui.NewScreenshotClient(adbClient, cli),
 		Input:         input.New(adbClient),
 		Logs:          diagnostics.NewLogClient(adbClient),
+		Record:        diagnostics.NewRecordClient(adbClient),
 		Screen:        system.NewScreenClient(adbClient),
 		Animations:    system.NewAnimationsClient(adbClient),
 		Activity:      system.NewActivityClient(adbClient),
@@ -85,6 +86,7 @@ func main() {
 		Location:      system.NewLocationClient(adbClient),
 		Notifications: system.NewNotificationClient(adbClient),
 		Shell:         system.NewShellClient(adbClient),
+		State:         system.NewStateClient(adbClient),
 	}
 	// Testing surface (Espresso/Compose-style verbs) layers on top of the
 	// existing layout + input clients.
