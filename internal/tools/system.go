@@ -367,7 +367,7 @@ func registerSystemState(s *mcp.Server, d *Deps) {
 	type batteryArgs struct {
 		DeviceArg
 		Reset    bool `json:"reset,omitempty" jsonschema:"if true, clear all overrides via 'dumpsys battery reset' and ignore other fields"`
-		Level    int  `json:"level,omitempty" jsonschema:"battery percentage 0..100; omit/zero leaves it untouched"`
+		Level    *int `json:"level,omitempty" jsonschema:"battery percentage 0..100; omit to leave unchanged (use 0 to simulate a dead battery)"`
 		Status   int  `json:"status,omitempty" jsonschema:"BatteryManager status code: 1 unknown · 2 charging · 3 discharging · 4 not_charging · 5 full"`
 		AC       int  `json:"ac,omitempty" jsonschema:"AC plugged: 1 unplugged | 2 plugged"`
 		USB      int  `json:"usb,omitempty" jsonschema:"USB plugged: 1 unplugged | 2 plugged"`
@@ -387,13 +387,12 @@ func registerSystemState(s *mcp.Server, d *Deps) {
 			}
 			return jsonResult(map[string]any{"ok": true, "reset": true})
 		}
-		if args.Level == 0 && args.Status == 0 && args.AC == 0 && args.USB == 0 && args.Wireless == 0 {
-			return errResult(fmt.Errorf("battery_set_state: at least one of level, status, ac, usb, wireless must be non-zero (or pass reset: true)"))
+		if args.Level == nil && args.Status == 0 && args.AC == 0 && args.USB == 0 && args.Wireless == 0 {
+			return errResult(fmt.Errorf("battery_set_state: at least one of level, status, ac, usb, wireless must be set (or pass reset: true)"))
 		}
-		st := system.BatteryState{}
-		st.Level = args.Level
-		if args.Level == 0 {
-			st.Level = -1
+		st := system.BatteryState{Level: -1}
+		if args.Level != nil {
+			st.Level = *args.Level
 		}
 		st.Status = args.Status
 		st.AC = args.AC
@@ -402,7 +401,11 @@ func registerSystemState(s *mcp.Server, d *Deps) {
 		if err := d.State.SetBattery(ctx, dev, st); err != nil {
 			return errResult(err)
 		}
-		return jsonResult(map[string]any{"ok": true, "level": args.Level, "status": args.Status, "ac": args.AC, "usb": args.USB, "wireless": args.Wireless})
+		levelOut := -1
+		if args.Level != nil {
+			levelOut = *args.Level
+		}
+		return jsonResult(map[string]any{"ok": true, "level": levelOut, "status": args.Status, "ac": args.AC, "usb": args.USB, "wireless": args.Wireless})
 	})
 
 	type networkArgs struct {
