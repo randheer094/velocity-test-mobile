@@ -60,11 +60,14 @@ func (c *RecordClient) Start(ctx context.Context, deviceID string, opts RecordOp
 		return "", fmt.Errorf("local_file: %w", err)
 	}
 
+	// Insert a placeholder before releasing the lock so a concurrent Start on
+	// the same device fails the busy-check before the adb.Stream call below.
 	c.mu.Lock()
 	if _, busy := c.sessions[deviceID]; busy {
 		c.mu.Unlock()
 		return "", fmt.Errorf("a recording is already in progress on this device — call screen_record_stop first")
 	}
+	c.sessions[deviceID] = nil
 	c.mu.Unlock()
 
 	remote = fmt.Sprintf("/sdcard/velocity-record-%d.mp4", time.Now().UnixNano())
@@ -82,6 +85,9 @@ func (c *RecordClient) Start(ctx context.Context, deviceID string, opts RecordOp
 
 	stream, err := c.Adb.Stream(ctx, deviceID, args...)
 	if err != nil {
+		c.mu.Lock()
+		delete(c.sessions, deviceID)
+		c.mu.Unlock()
 		return "", fmt.Errorf("start screenrecord: %w", err)
 	}
 	// Drain stdout so the pipe doesn't fill and block the device.
@@ -121,7 +127,10 @@ func (c *RecordClient) Stop(ctx context.Context, deviceID string) (StopResult, e
 	// the file when it sees the parent shell go away.
 	sess.Stream.Cancel()
 	// Give the device a brief moment to finalize the MP4 container.
-	time.Sleep(750 * time.Millisecond)
+	select {
+	case <-time.After(750 * time.Millisecond):
+	case <-ctx.Done():
+	}
 
 	// Pull file off the device.
 	if _, err := c.Adb.Run(ctx, deviceID, "pull", sess.RemoteFile, sess.LocalFile); err != nil {

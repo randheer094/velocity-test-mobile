@@ -1,6 +1,7 @@
 package testing
 
 import (
+	"context"
 	"regexp"
 	"strings"
 	"testing"
@@ -80,6 +81,20 @@ func TestPredicate_LongClickable(t *testing.T) {
 	}
 	if (ui.Element{}).LongClickable {
 		t.Fatalf("zero element should not match")
+	}
+}
+
+// TestAssertTextRegex_InvalidPattern exercises the application-level error path
+// in AssertTextRegex — the function must reject the pattern before touching
+// the LayoutClient, so a zero-value Orchestrator is sufficient here.
+func TestAssertTextRegex_InvalidPattern(t *testing.T) {
+	o := &Orchestrator{}
+	_, err := o.AssertTextRegex(context.Background(), "dev", nil, "[invalid")
+	if err == nil {
+		t.Fatal("expected error for invalid regex, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid regex") {
+		t.Fatalf("unexpected error message: %v", err)
 	}
 }
 

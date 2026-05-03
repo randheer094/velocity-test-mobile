@@ -58,6 +58,15 @@ inside the MCP contract instead of falling back to `Bash` for `adb shell`.
 | `notification_tap` | no | `bundle_id`, `channel_id?`, `title_match?` | Higher-level convenience: opens the shade, finds a matching notification by title/text via the testing matcher, clicks it, collapses the shade. |
 | `shell_exec` | no | `command`, `timeout_ms?` (default 10000) | Documented backstop for arbitrary `adb shell <command>`. Returns `{ stdout, stderr, exit_code }` regardless of exit status. Prefer the typed wrappers above; reach for this only for one-off introspection (new dumpsys services, debug-only setprop). |
 
+## Screen capture & visual regression
+
+| Tool | Read-only | Args | Behaviour |
+| --- | --- | --- | --- |
+| `screen_capture` | yes | `displayId?`, `saveTo?` | Returns PNG inline (`mcp.ImageContent`). If `saveTo` is set, also writes the PNG/JPG to disk. |
+| `screen_layout` | yes | — | Flat list of interactive elements with bounds. (Use `find_*` for targeted lookups.) |
+| `screen_resolve` | yes | `label` | LLM-friendly visual label-to-coordinates lookup via `android screen resolve`. Requires the agent CLI. |
+| `screen_diff` | yes | `pathA`, `pathB`, `diffOutput?`, `tolerance?`, `thresholdPct?` | Per-pixel comparison; optionally writes a red-overlay diff image. Reports `mismatchedPixels`, `mismatchPct`, `exceedsTolerance`. |
+
 ## Device-state simulation
 
 Test-time environmental knobs. None of these survive a device reboot — call them at the start of each session and (for `battery_set_state`) reset before exit.
@@ -70,15 +79,6 @@ Test-time environmental knobs. None of these survive a device reboot — call th
 | `battery_set_state` | no | `reset?: bool`, `level?: 0..100`, `status?: 1..5`, `ac?: 1|2`, `usb?: 1|2`, `wireless?: 1|2` | `dumpsys battery set ...`. Pair test-time overrides with `{reset: true}` in cleanup; otherwise the device reports fake state until reboot. Status codes: 1 unknown · 2 charging · 3 discharging · 4 not_charging · 5 full. AC/USB/wireless: 1 unplugged, 2 plugged. |
 | `network_set` | no | `wifi?: bool`, `mobile?: bool` | `svc wifi enable|disable`, `svc data enable|disable`. Set only the radios you want to change. |
 | `app_set_locale` | no | `package`, `tag?` | `cmd locale set-app-locales`. Empty `tag` clears the override. Distinct from `app_launch.locale` (per-launch only). |
-
-## Screen capture & visual regression
-
-| Tool | Read-only | Args | Behaviour |
-| --- | --- | --- | --- |
-| `screen_capture` | yes | `displayId?`, `saveTo?` | Returns PNG inline (`mcp.ImageContent`). If `saveTo` is set, also writes the PNG/JPG to disk. |
-| `screen_layout` | yes | — | Flat list of interactive elements with bounds. (Use `find_*` for targeted lookups.) |
-| `screen_resolve` | yes | `label` | LLM-friendly visual label-to-coordinates lookup via `android screen resolve`. Requires the agent CLI. |
-| `screen_diff` | yes | `pathA`, `pathB`, `diffOutput?`, `tolerance?`, `thresholdPct?` | Per-pixel comparison; optionally writes a red-overlay diff image. Reports `mismatchedPixels`, `mismatchPct`, `exceedsTolerance`. |
 
 ## Input utilities
 
@@ -101,7 +101,7 @@ Test-time environmental knobs. None of these survive a device reboot — call th
 | --- | --- | --- | --- |
 | `logcat_tail` | yes | `package?`, `tag?`, `priority?`, `maxLines?`, `since?`, `regex?` | `logcat -d` with the given filterspec; `package` is resolved to a PID via `pidof`. `regex` is post-filtered in Go. |
 | `logcat_clear` | no | — | `logcat -c`. |
-| `screen_record_start` | no | `local_file`, `max_duration_s?`, `size_width?`, `size_height?`, `bit_rate?` | Begins `adb shell screenrecord` in the background, writing to `/sdcard/`. One active recording per device. |
+| `screen_record_start` | no | `local_file`, `max_duration_s?`, `size_width?`, `size_height?`, `bit_rate?` | Begins `adb shell screenrecord` in the background, writing to `/sdcard/`. One active recording per device. Returns `{ remote_file }` — save this path; if the server crashes before `screen_record_stop`, call `pull_file` + `shell_exec rm -f <remote_file>` to recover. The device-side process is bounded by `--time-limit` (max 180 s on older Android, 1800 s on Android 11+). |
 | `screen_record_stop` | no | — | Cancels the active recording, pulls the MP4 to the path passed to `screen_record_start`, and removes the device-side temp. Returns `{ local_file, remote_file, duration_ms }`. |
 | `pull_file` | no | `remote`, `local` | `adb pull` for arbitrary paths (`/sdcard/`, `/data/local/tmp/`). For debuggable-app private storage, prefer `app_data_read`. |
 
@@ -156,7 +156,7 @@ All assertion tools are read-only and return an `AssertResult`. They re-snapshot
 | `assert_content_description_contains` | `substring: string` | Substring complement to `_equals`. |
 | `assert_error_text_equals` | `expected: string` | Espresso `hasErrorText(text)` for form-validation labels. |
 | `assert_hint_equals` | `expected: string` | Espresso `withHint(text)`. |
-| `assert_input_type` | `class_substring: string` | Espresso `withInputType(...)` — externally approximated by class substring. |
+| `assert_input_type` | `class_substring: string` | Espresso `withInputType(...)` — externally approximated by substring-matching the node's accessibility class (e.g. `"EditText"` matches any text input field; `"NumberDecimalInput"` is unlikely to match since the class is always `android.widget.EditText`). Does not expose the in-process `InputType` bitmask. |
 
 ### Geometry (require explicit `density`)
 

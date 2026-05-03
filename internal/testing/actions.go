@@ -357,6 +357,9 @@ func (o *Orchestrator) DragNode(ctx context.Context, deviceID string, from, to *
 	if err != nil {
 		return ActionResult{Element: &src, Reason: "to: " + err.Error()}, err
 	}
+	if durationMs <= 0 {
+		durationMs = 600
+	}
 	fx, fy := CenterOf(src)
 	tx, ty := CenterOf(dst)
 	if err := o.Input.Drag(ctx, deviceID, fx, fy, tx, ty, durationMs); err != nil {

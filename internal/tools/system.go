@@ -346,14 +346,14 @@ func registerSystemState(s *mcp.Server, d *Deps) {
 		return jsonResult(map[string]any{"ok": true, "mode": args.Mode})
 	})
 
-	type onArgs struct {
+	type airplaneModeArgs struct {
 		DeviceArg
 		On bool `json:"on"`
 	}
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "airplane_mode_set",
 		Description: "Toggle airplane mode via `cmd connectivity airplane-mode enable|disable`. On older Android versions this command may not exist; the error surfaces verbatim.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, args onArgs) (*mcp.CallToolResult, any, error) {
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, args airplaneModeArgs) (*mcp.CallToolResult, any, error) {
 		dev, err := d.resolveDevice(ctx, args.Device)
 		if err != nil {
 			return errResult(err)
@@ -387,10 +387,10 @@ func registerSystemState(s *mcp.Server, d *Deps) {
 			}
 			return jsonResult(map[string]any{"ok": true, "reset": true})
 		}
-		st := system.BatteryState{Level: -1}
-		if args.Level > 0 || args.Level == 0 && args.Status == 0 && args.AC == 0 && args.USB == 0 && args.Wireless == 0 {
-			// 0 with no other fields would be ambiguous — reject up-front.
+		if args.Level == 0 && args.Status == 0 && args.AC == 0 && args.USB == 0 && args.Wireless == 0 {
+			return errResult(fmt.Errorf("battery_set_state: at least one of level, status, ac, usb, wireless must be non-zero (or pass reset: true)"))
 		}
+		st := system.BatteryState{}
 		st.Level = args.Level
 		if args.Level == 0 {
 			st.Level = -1
