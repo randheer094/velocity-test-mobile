@@ -123,6 +123,10 @@ func (c *RecordClient) Stop(ctx context.Context, deviceID string) (StopResult, e
 	delete(c.sessions, deviceID)
 	c.mu.Unlock()
 
+	if sess == nil {
+		return StopResult{}, fmt.Errorf("recording is still initialising — try again in a moment")
+	}
+
 	// Cancel the stream to send SIGINT — screenrecord on the device flushes
 	// the file when it sees the parent shell go away.
 	sess.Stream.Cancel()
