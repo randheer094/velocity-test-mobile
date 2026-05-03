@@ -30,6 +30,7 @@ type Deps struct {
 	Screenshot    *ui.ScreenshotClient
 	Input         *input.Client
 	Logs          *diagnostics.LogClient
+	Record        *diagnostics.RecordClient
 	Screen        *system.ScreenClient
 	Animations    *system.AnimationsClient
 	Activity      *system.ActivityClient
@@ -37,6 +38,7 @@ type Deps struct {
 	Location      *system.LocationClient
 	Notifications *system.NotificationClient
 	Shell         *system.ShellClient
+	State         *system.StateClient
 	Tester        *apptest.Orchestrator
 	Intents       *apptest.IntentRecorder
 }

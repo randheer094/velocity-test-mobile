@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/randheer094/velocity-test-mobile/internal/matcher"
@@ -475,4 +476,86 @@ func (o *Orchestrator) AssertHasDescendant(ctx context.Context, deviceID string,
 	combined := *m
 	combined.HasDescendant = descendant
 	return o.AssertExists(ctx, deviceID, &combined)
+}
+
+// AssertTextRegex — match `m`, then assert the matched element's text matches
+// the Go regex. Surfaces the matcher.TextRegex predicate as a top-level verb
+// so `--list-tools` lists it next to the other text asserts.
+func (o *Orchestrator) AssertTextRegex(ctx context.Context, deviceID string, m *matcher.Matcher, pattern string) (AssertResult, error) {
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return AssertResult{}, fmt.Errorf("invalid regex %q: %w", pattern, err)
+	}
+	return o.assertWith(ctx, deviceID, m, func(e ui.Element) (bool, string) {
+		if re.MatchString(e.Text) {
+			return true, ""
+		}
+		return false, fmt.Sprintf("text=%q does not match regex %q", e.Text, pattern)
+	})
+}
+
+// AssertContentDescriptionContains — substring match against contentDescription.
+// Mirrors AssertTextContains, completing the symmetry with AssertContentDescriptionEquals.
+func (o *Orchestrator) AssertContentDescriptionContains(ctx context.Context, deviceID string, m *matcher.Matcher, substring string) (AssertResult, error) {
+	return o.assertWith(ctx, deviceID, m, func(e ui.Element) (bool, string) {
+		if strings.Contains(e.Label, substring) {
+			return true, ""
+		}
+		return false, fmt.Sprintf("contentDescription=%q does not contain %q", e.Label, substring)
+	})
+}
+
+// AssertErrorTextEquals — Espresso hasErrorText(text).
+func (o *Orchestrator) AssertErrorTextEquals(ctx context.Context, deviceID string, m *matcher.Matcher, expected string) (AssertResult, error) {
+	return o.assertWith(ctx, deviceID, m, func(e ui.Element) (bool, string) {
+		if e.ErrorText == expected {
+			return true, ""
+		}
+		return false, fmt.Sprintf("errorText=%q, expected %q", e.ErrorText, expected)
+	})
+}
+
+// AssertHintEquals — Espresso withHint(text).
+func (o *Orchestrator) AssertHintEquals(ctx context.Context, deviceID string, m *matcher.Matcher, expected string) (AssertResult, error) {
+	return o.assertWith(ctx, deviceID, m, func(e ui.Element) (bool, string) {
+		if e.Hint == expected {
+			return true, ""
+		}
+		return false, fmt.Sprintf("hint=%q, expected %q", e.Hint, expected)
+	})
+}
+
+// AssertInputType — Espresso withInputType(type). Externally we approximate
+// by substring-matching the node's class (e.g. "EditText", "Password") since
+// the in-process InputType bitmask isn't exposed via UIAutomator XML.
+func (o *Orchestrator) AssertInputType(ctx context.Context, deviceID string, m *matcher.Matcher, classSubstring string) (AssertResult, error) {
+	return o.assertWith(ctx, deviceID, m, func(e ui.Element) (bool, string) {
+		if strings.Contains(e.Class, classSubstring) {
+			return true, ""
+		}
+		return false, fmt.Sprintf("class=%q does not contain %q", e.Class, classSubstring)
+	})
+}
+
+// AssertLongClickable — Espresso isLongClickable.
+func (o *Orchestrator) AssertLongClickable(ctx context.Context, deviceID string, m *matcher.Matcher) (AssertResult, error) {
+	return o.assertWith(ctx, deviceID, m, func(e ui.Element) (bool, string) {
+		if e.LongClickable {
+			return true, ""
+		}
+		return false, "element is not long-clickable"
+	})
+}
+
+// AssertHasImeAction — Espresso hasImeAction. Best-effort signal aligned with
+// the matcher's HasImeAction predicate: focusable + editable class.
+func (o *Orchestrator) AssertHasImeAction(ctx context.Context, deviceID string, m *matcher.Matcher) (AssertResult, error) {
+	return o.assertWith(ctx, deviceID, m, func(e ui.Element) (bool, string) {
+		got := e.Focusable && (strings.Contains(e.Class, "EditText") ||
+			strings.Contains(e.Class, "TextInput") || strings.Contains(e.Class, "TextField"))
+		if got {
+			return true, ""
+		}
+		return false, "element does not declare an IME action (not focusable or not an editable class)"
+	})
 }

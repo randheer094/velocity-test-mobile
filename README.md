@@ -2,7 +2,7 @@
 
 An **Android testing** [Model Context Protocol](https://modelcontextprotocol.io) server, written in Go.
 
-The server exposes **Espresso** ViewMatchers/ViewActions/ViewAssertions and **Jetpack Compose** test verbs (`onNodeWithText`, `assertIsDisplayed`, `performClick`, `waitUntilExists`, …) as **104 MCP tools** an LLM agent can call directly. Each tool takes a shared **matcher** object — the same vocabulary across find / assert / act / wait — so an agent's prompt of *"verify Login is visible; click Continue; wait for Welcome"* maps to three self-contained tool calls with no element handles to thread.
+The server exposes **Espresso** ViewMatchers/ViewActions/ViewAssertions and **Jetpack Compose** test verbs (`onNodeWithText`, `assertIsDisplayed`, `performClick`, `waitUntilExists`, …) as **129 MCP tools** an LLM agent can call directly. Each tool takes a shared **matcher** object — the same vocabulary across find / assert / act / wait — so an agent's prompt of *"verify Login is visible; click Continue; wait for Welcome"* maps to three self-contained tool calls with no element handles to thread.
 
 Internally the server walks the device's accessibility tree (UIAutomator XML or Google's [`android` agent CLI](https://developer.android.com/tools/agents/android-cli) JSON), applies the matcher, and dispatches `adb shell input` actions. **No in-process instrumentation** — no companion APK, no Espresso runtime on the device.
 
@@ -18,6 +18,7 @@ Internally the server walks the device's accessibility tree (UIAutomator XML or 
 | **[`docs/TOOLS.md`](docs/TOOLS.md)** | Every tool, its arguments, and what it maps to in Espresso/Compose. |
 | **[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)** | How the server is structured: layered packages, request flow, sync model, failure modes. |
 | **[`docs/EXAMPLES.md`](docs/EXAMPLES.md)** | Realistic test flows expressed as MCP tool calls — login, list scrolling, deep-link assertions, visual regression, sibling correctness. |
+| **[`examples/sample-skill/`](examples/sample-skill/)** | A complete worked Markdown-runbook skill — preflight, fixtures for preparation and teardown, three sample tests — written in the human-friendly prose style backed by a verb→tool vocabulary. |
 
 ## Runtime requirements
 
@@ -57,7 +58,7 @@ git clone https://github.com/randheer094/velocity-test-mobile.git
 cd velocity-test-mobile
 make install                     # builds, then moves binary to ~/.local/bin
 velocity-test-mobile --version
-velocity-test-mobile --list-tools | wc -l   # 104
+velocity-test-mobile --list-tools | wc -l   # 129
 ```
 
 ## Hooking up to a client
@@ -173,23 +174,24 @@ Every assert / act / wait tool takes a `match` selector with the same JSON shape
 
 See [`docs/MATCHERS.md`](docs/MATCHERS.md) for the field-by-field reference and [`docs/EXAMPLES.md`](docs/EXAMPLES.md) for realistic flows.
 
-## Tools at a glance (104)
+## Tools at a glance (129)
 
 | Group | Examples |
 | --- | --- |
 | **Find** | `find_node`, `find_all_nodes`, `count_nodes`, `print_tree` |
 | **Assert — visibility** | `assert_visible`, `assert_not_visible`, `assert_completely_displayed`, `assert_displaying_at_least`, `assert_exists`, `assert_does_not_exist` |
-| **Assert — state** | `assert_clickable`, `assert_enabled`/`assert_disabled`, `assert_focused`, `assert_selected`, `assert_checked`/`assert_unchecked`, `assert_on`/`assert_off`, `assert_toggleable` |
-| **Assert — text/CD** | `assert_text_equals`, `assert_text_contains`, `assert_content_description_equals` |
+| **Assert — state** | `assert_clickable`, `assert_long_clickable`, `assert_enabled`/`assert_disabled`, `assert_focused`, `assert_selected`, `assert_checked`/`assert_unchecked`, `assert_on`/`assert_off`, `assert_toggleable`, `assert_has_ime_action` |
+| **Assert — text/CD** | `assert_text_equals`, `assert_text_contains`, `assert_text_regex`, `assert_content_description_equals`, `assert_content_description_contains`, `assert_error_text_equals`, `assert_hint_equals`, `assert_input_type` |
 | **Assert — geometry** | `assert_width_dp`, `assert_height_dp`, `assert_width_at_least_dp`, `assert_height_at_least_dp`, `assert_position_in_root` |
 | **Assert — tree shape** | `assert_is_root`, `assert_has_child_count`, `assert_has_minimum_child_count`, `assert_has_descendant` |
 | **Assert — collections** | `assert_count_equals`, `assert_any`, `assert_all` |
-| **Act** | `click`, `double_click`, `long_click`, `type_text`, `replace_text`, `clear_text`, `submit_text`, `swipe_node`, `slow_swipe_node`, `scroll_to`, `scroll_to_index`, `perform_ime_action`, `perform_key_press`, `assert_clickable_and_click` |
-| **Sync** | `wait_until_visible`, `wait_until_not_visible`, `wait_until_text`, `wait_until_count`, `wait_until_at_least_one_exists`, `wait_for_idle` |
+| **Act** | `click`, `double_click`, `long_click`, `type_text`, `replace_text`, `clear_text`, `submit_text`, `swipe_node`, `slow_swipe_node`, `scroll_to`, `scroll_to_index`, `drag_node`, `perform_ime_action`, `perform_key_press`, `assert_clickable_and_click` |
+| **Sync** | `wait_until_visible`, `wait_until_not_visible`, `wait_until_text`, `wait_until_count`, `wait_until_at_least_one_exists`, `wait_until_enabled`, `wait_until_clickable`, `wait_until_checked`, `wait_until_focused`, `wait_for_idle` |
 | **Espresso top-level** | `espresso_press_back`, `press_back_unconditionally`, `close_soft_keyboard`, `open_overflow_menu`, `open_contextual_action_mode_menu` |
 | **Intents (recording-only)** | `intent_monitor_start`, `intent_monitor_stop`, `intent_list_captured`, `assert_intent_sent`, `assert_intent_count` |
-| **Test fixtures** | `device_list`, `device_get_screen_size`, `device_get_props`, `device_get_orientation`, `device_set_orientation`, `animations_set`, `animations_get`, `app_list`, `app_launch`, `app_terminate`, `app_clear_data`, `app_get_info`, `permission_grant`, `permission_revoke`, `appops_set`, `appops_get`, `intent_send`, `app_data_list`, `app_data_read`, `screen_capture`, `screen_layout`, `screen_resolve`, `screen_diff`, `clipboard_get`, `clipboard_set`, `press_key`, `type_into_focused`, `logcat_tail`, `logcat_clear` |
+| **Test fixtures** | `device_list`, `device_get_screen_size`, `device_get_props`, `device_get_orientation`, `device_set_orientation`, `animations_set`, `animations_get`, `app_list`, `app_launch`, `app_terminate`, `app_clear_data`, `app_get_info`, `permission_grant`, `permission_revoke`, `appops_set`, `appops_get`, `intent_send`, `app_data_list`, `app_data_read`, `screen_capture`, `screen_layout`, `screen_resolve`, `screen_diff`, `clipboard_get`, `clipboard_set`, `press_key`, `type_into_focused`, `tap_at_coordinates`, `long_press_at_coordinates`, `swipe_screen`, `drag_screen`, `logcat_tail`, `logcat_clear`, `screen_record_start`, `screen_record_stop`, `pull_file` |
 | **Activity / service / location / shell** | `activity_get_top`, `activity_wait_for_top`, `activity_start`, `service_get_state`, `service_wait_for_state`, `location_get_last_known`, `notification_list`, `notification_shade_set`, `notification_tap`, `shell_exec` |
+| **Device-state simulation** | `device_set_font_scale`, `device_set_dark_mode`, `airplane_mode_set`, `battery_set_state`, `network_set`, `app_set_locale` |
 
 Full reference in [`docs/TOOLS.md`](docs/TOOLS.md).
 
@@ -208,6 +210,10 @@ The `shell_exec` tool forwards arbitrary commands verbatim to `adb shell` on the
 | `assertWidthIsEqualTo(dp)` | Supported via `assert_width_dp` with an explicit `density` argument; pixel-to-dp conversion happens server-side. |
 | `performKeyPress(key, meta)` | Modifier flags (Ctrl/Shift/Alt) dispatch via `input keycombination` on Android 12+; on older devices the key alone is sent and the result reports the missing coverage. |
 | `performScrollToIndex(idx)` | LazyColumn/Row indexing is opaque externally; we dispatch `idx` page-sized swipes inside the matched scrollable container (direction configurable). |
+| Multi-touch (`pinch`, `spread`, two-finger swipe) | Not exposed. `adb shell input` is single-touch, `sendevent` is non-portable across emulator builds, and UIAutomator's `MultiTouchEvent` is in-process. Maps and gallery flows that need pinch-to-zoom are out of reach without relaxing the no-companion-APK rule. |
+| `performSemanticsAction(key)` | Not exposed. Compose's keyed action registry is in-process; without instrumentation we can't enumerate or invoke registered actions. |
+| Compose `assertValueEquals(value)` / `assertRangeInfoEquals` | Not exposed. UIAutomator's accessibility-tree XML doesn't include `RangeInfo`; reading the slider/progress value requires a custom AccessibilityService or an in-process hook. |
+| WebView interaction | Not exposed. Doable via the Chrome DevTools Protocol over `adb forward localabstract:chrome_devtools_remote`, but that's a separate package; not in the current scope. |
 
 ## A worked example
 

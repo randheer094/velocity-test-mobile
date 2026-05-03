@@ -67,6 +67,101 @@ func RegisterInput(s *mcp.Server, d *Deps) {
 		return textResult("pressed " + args.Key)
 	})
 
+	type tapAtArgs struct {
+		DeviceArg
+		X int `json:"x" jsonschema:"x coordinate in pixels (0-based, top-left origin)"`
+		Y int `json:"y" jsonschema:"y coordinate in pixels"`
+	}
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "tap_at_coordinates",
+		Description: "Send a tap at raw screen coordinates. Use as a fallback when no matcher resolves the target — e.g. fully custom Canvas surfaces, unlabelled Compose drawing, or in-app web content. Prefer the semantic `click` (matcher-based) for ordinary UI.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, args tapAtArgs) (*mcp.CallToolResult, any, error) {
+		dev, err := d.resolveDevice(ctx, args.Device)
+		if err != nil {
+			return errResult(err)
+		}
+		if err := d.Input.Tap(ctx, dev, args.X, args.Y); err != nil {
+			return errResult(err)
+		}
+		return jsonResult(map[string]any{"ok": true, "x": args.X, "y": args.Y})
+	})
+
+	type longPressAtArgs struct {
+		DeviceArg
+		X          int `json:"x"`
+		Y          int `json:"y"`
+		DurationMs int `json:"durationMs,omitempty" jsonschema:"hold time in ms (default 800)"`
+	}
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "long_press_at_coordinates",
+		Description: "Long-press at raw screen coordinates. Same fallback role as tap_at_coordinates; default duration 800ms.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, args longPressAtArgs) (*mcp.CallToolResult, any, error) {
+		dev, err := d.resolveDevice(ctx, args.Device)
+		if err != nil {
+			return errResult(err)
+		}
+		dur := args.DurationMs
+		if dur <= 0 {
+			dur = 800
+		}
+		if err := d.Input.LongPress(ctx, dev, args.X, args.Y, dur); err != nil {
+			return errResult(err)
+		}
+		return jsonResult(map[string]any{"ok": true, "x": args.X, "y": args.Y, "durationMs": dur})
+	})
+
+	type swipeScreenArgs struct {
+		DeviceArg
+		FromX      int `json:"fromX"`
+		FromY      int `json:"fromY"`
+		ToX        int `json:"toX"`
+		ToY        int `json:"toY"`
+		DurationMs int `json:"durationMs,omitempty" jsonschema:"swipe duration in ms (default 200 — fast swipe). Longer values register as drag in some apps; see drag_screen."`
+	}
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "swipe_screen",
+		Description: "Swipe from (fromX,fromY) to (toX,toY) at the screen level. Default duration 200ms. Use for full-screen gestures (edge swipes, pull-to-refresh) where a node-scoped swipe_node isn't appropriate.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, args swipeScreenArgs) (*mcp.CallToolResult, any, error) {
+		dev, err := d.resolveDevice(ctx, args.Device)
+		if err != nil {
+			return errResult(err)
+		}
+		dur := args.DurationMs
+		if dur <= 0 {
+			dur = 200
+		}
+		if err := d.Input.Drag(ctx, dev, args.FromX, args.FromY, args.ToX, args.ToY, dur); err != nil {
+			return errResult(err)
+		}
+		return jsonResult(map[string]any{"ok": true, "fromX": args.FromX, "fromY": args.FromY, "toX": args.ToX, "toY": args.ToY, "durationMs": dur})
+	})
+
+	type dragScreenArgs struct {
+		DeviceArg
+		FromX      int `json:"fromX"`
+		FromY      int `json:"fromY"`
+		ToX        int `json:"toX"`
+		ToY        int `json:"toY"`
+		DurationMs int `json:"durationMs,omitempty" jsonschema:"drag duration in ms (default 800 — slow enough to register as a drag rather than swipe in most apps)"`
+	}
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "drag_screen",
+		Description: "Drag from (fromX,fromY) to (toX,toY) at the screen level. Same dispatch as swipe_screen but with a longer default (800ms) so apps that distinguish drag-and-drop from swipes register the gesture correctly.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, args dragScreenArgs) (*mcp.CallToolResult, any, error) {
+		dev, err := d.resolveDevice(ctx, args.Device)
+		if err != nil {
+			return errResult(err)
+		}
+		dur := args.DurationMs
+		if dur <= 0 {
+			dur = 800
+		}
+		if err := d.Input.Drag(ctx, dev, args.FromX, args.FromY, args.ToX, args.ToY, dur); err != nil {
+			return errResult(err)
+		}
+		return jsonResult(map[string]any{"ok": true, "fromX": args.FromX, "fromY": args.FromY, "toX": args.ToX, "toY": args.ToY, "durationMs": dur})
+	})
+
 	type typeFocusedArgs struct {
 		DeviceArg
 		Text   string `json:"text"`

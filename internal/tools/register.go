@@ -38,9 +38,12 @@ func Catalog() []string {
 
 		// input utilities (semantic verbs live in the testing surface)
 		"clipboard_get", "clipboard_set", "press_key", "type_into_focused",
+		"tap_at_coordinates", "long_press_at_coordinates",
+		"swipe_screen", "drag_screen",
 
 		// logs (test debug)
 		"logcat_tail", "logcat_clear",
+		"screen_record_start", "screen_record_stop", "pull_file",
 
 		// system state required by Espresso/Compose tests
 		"animations_set", "animations_get",
@@ -52,6 +55,11 @@ func Catalog() []string {
 		"notification_list", "notification_shade_set", "notification_tap",
 		"shell_exec",
 
+		// device-state simulation (test-time environmental knobs)
+		"device_set_font_scale", "device_set_dark_mode",
+		"airplane_mode_set", "battery_set_state", "network_set",
+		"app_set_locale",
+
 		// testing — finders / debug
 		"find_node", "find_all_nodes", "count_nodes", "print_tree",
 
@@ -62,8 +70,10 @@ func Catalog() []string {
 		"assert_clickable", "assert_enabled", "assert_disabled",
 		"assert_focused", "assert_selected", "assert_checked", "assert_unchecked",
 		"assert_on", "assert_off", "assert_toggleable",
-		"assert_text_equals", "assert_text_contains",
-		"assert_content_description_equals",
+		"assert_text_equals", "assert_text_contains", "assert_text_regex",
+		"assert_content_description_equals", "assert_content_description_contains",
+		"assert_error_text_equals", "assert_hint_equals", "assert_input_type",
+		"assert_long_clickable", "assert_has_ime_action",
 		"assert_count_equals", "assert_has_descendant",
 		"assert_width_dp", "assert_height_dp",
 		"assert_width_at_least_dp", "assert_height_at_least_dp",
@@ -76,6 +86,7 @@ func Catalog() []string {
 		"click", "double_click", "long_click",
 		"type_text", "replace_text", "clear_text", "submit_text",
 		"swipe_node", "slow_swipe_node", "scroll_to", "scroll_to_index",
+		"drag_node",
 		"perform_ime_action", "perform_key_press",
 		"assert_clickable_and_click",
 
@@ -83,6 +94,8 @@ func Catalog() []string {
 		"wait_until_visible", "wait_until_not_visible",
 		"wait_until_text", "wait_until_count",
 		"wait_until_at_least_one_exists", "wait_for_idle",
+		"wait_until_enabled", "wait_until_clickable",
+		"wait_until_checked", "wait_until_focused",
 
 		// testing — Espresso conveniences
 		"espresso_press_back", "press_back_unconditionally",

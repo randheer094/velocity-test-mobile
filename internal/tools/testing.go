@@ -391,6 +391,74 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 			return o.AssertContentDescriptionEquals(ctx, dev, m, x.Expected)
 		})
 
+	addMatcherTool("assert_content_description_contains",
+		"Assert the matched element's content description contains the substring.",
+		true,
+		map[string]any{"substring": map[string]any{"type": "string"}},
+		[]string{"substring"},
+		func(ctx context.Context, dev string, m *matcher.Matcher, raw json.RawMessage) (any, error) {
+			var x struct {
+				Substring string `json:"substring"`
+			}
+			_ = json.Unmarshal(raw, &x)
+			return o.AssertContentDescriptionContains(ctx, dev, m, x.Substring)
+		})
+
+	addMatcherTool("assert_text_regex",
+		"Assert the matched element's text matches the supplied Go regex.",
+		true,
+		map[string]any{"pattern": map[string]any{"type": "string", "description": "Go regular expression (RE2 syntax)"}},
+		[]string{"pattern"},
+		func(ctx context.Context, dev string, m *matcher.Matcher, raw json.RawMessage) (any, error) {
+			var x struct {
+				Pattern string `json:"pattern"`
+			}
+			_ = json.Unmarshal(raw, &x)
+			return o.AssertTextRegex(ctx, dev, m, x.Pattern)
+		})
+
+	addMatcherTool("assert_error_text_equals",
+		"Assert the matched element's error text equals expected (Espresso hasErrorText).",
+		true,
+		map[string]any{"expected": map[string]any{"type": "string"}},
+		[]string{"expected"},
+		func(ctx context.Context, dev string, m *matcher.Matcher, raw json.RawMessage) (any, error) {
+			var x struct {
+				Expected string `json:"expected"`
+			}
+			_ = json.Unmarshal(raw, &x)
+			return o.AssertErrorTextEquals(ctx, dev, m, x.Expected)
+		})
+
+	addMatcherTool("assert_hint_equals",
+		"Assert the matched element's hint equals expected (Espresso withHint).",
+		true,
+		map[string]any{"expected": map[string]any{"type": "string"}},
+		[]string{"expected"},
+		func(ctx context.Context, dev string, m *matcher.Matcher, raw json.RawMessage) (any, error) {
+			var x struct {
+				Expected string `json:"expected"`
+			}
+			_ = json.Unmarshal(raw, &x)
+			return o.AssertHintEquals(ctx, dev, m, x.Expected)
+		})
+
+	addMatcherTool("assert_input_type",
+		"Assert the matched element's class contains the supplied substring (Espresso withInputType — externally approximated, since the InputType bitmask isn't exposed via UIAutomator XML).",
+		true,
+		map[string]any{"class_substring": map[string]any{"type": "string", "description": "substring like \"EditText\", \"Password\", \"TextField\""}},
+		[]string{"class_substring"},
+		func(ctx context.Context, dev string, m *matcher.Matcher, raw json.RawMessage) (any, error) {
+			var x struct {
+				ClassSubstring string `json:"class_substring"`
+			}
+			_ = json.Unmarshal(raw, &x)
+			return o.AssertInputType(ctx, dev, m, x.ClassSubstring)
+		})
+
+	registerSimpleAssert("assert_long_clickable", "Assert the matched element is long-clickable (Espresso isLongClickable).", o.AssertLongClickable)
+	registerSimpleAssert("assert_has_ime_action", "Assert the matched element declares an IME action (Espresso hasImeAction). External best effort: focusable + editable class.", o.AssertHasImeAction)
+
 	addMatcherTool("assert_count_equals",
 		"Assert the number of elements matching equals expected (Compose assertCountEquals).",
 		true,
@@ -624,6 +692,42 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 		return jsonResultDirect(res), nil
 	})
 
+	// drag_node — two matchers, custom schema (see assert_has_descendant for the same pattern).
+	s.AddTool(&mcp.Tool{
+		Name:        "drag_node",
+		Description: "Drag the centre of the `from` matcher to the centre of the `to` matcher. Use for reorderable lists, drag-and-drop, and slider thumbs that direction-based swipe_node can't reach.",
+		InputSchema: map[string]any{
+			"type": "object",
+			"$defs": map[string]any{
+				"matcher": matcherSchemaDef,
+			},
+			"properties": map[string]any{
+				"device":     deviceProp,
+				"from":       map[string]any{"$ref": "#/$defs/matcher"},
+				"to":         map[string]any{"$ref": "#/$defs/matcher"},
+				"durationMs": map[string]any{"type": "integer", "minimum": 1, "maximum": 10000, "description": "drag duration in ms (default 600)"},
+			},
+			"required":             []string{"from", "to"},
+			"additionalProperties": false,
+		},
+	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		var args struct {
+			Device     string          `json:"device"`
+			From       matcher.Matcher `json:"from"`
+			To         matcher.Matcher `json:"to"`
+			DurationMs int             `json:"durationMs"`
+		}
+		if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
+			return errResultDirect(err), nil
+		}
+		dev, err := d.resolveDevice(ctx, args.Device)
+		if err != nil {
+			return errResultDirect(err), nil
+		}
+		res, _ := o.DragNode(ctx, dev, &args.From, &args.To, args.DurationMs)
+		return jsonResultDirect(res), nil
+	})
+
 	addMatcherTool("perform_ime_action",
 		"Press ENTER on the matched (or currently focused) field (Espresso pressImeActionButton).",
 		false, nil, nil,
@@ -732,6 +836,30 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 			_ = json.Unmarshal(raw, &x)
 			return o.WaitUntilAtLeastOneExists(ctx, dev, m, x.Count, x.TimeoutMs, x.IntervalMs)
 		})
+
+	registerStateWait := func(name, desc string, fn func(context.Context, string, *matcher.Matcher, int, int) (testing.WaitResult, error)) {
+		addMatcherTool(name, desc, true, waitProps, nil,
+			func(ctx context.Context, dev string, m *matcher.Matcher, raw json.RawMessage) (any, error) {
+				var x struct {
+					TimeoutMs  int `json:"timeoutMs"`
+					IntervalMs int `json:"intervalMs"`
+				}
+				_ = json.Unmarshal(raw, &x)
+				return fn(ctx, dev, m, x.TimeoutMs, x.IntervalMs)
+			})
+	}
+	registerStateWait("wait_until_enabled",
+		"Poll until the matched element is enabled. Use after dispatching state changes (form fills, async loads) before driving an action against the element.",
+		o.WaitUntilEnabled)
+	registerStateWait("wait_until_clickable",
+		"Poll until the matched element is clickable.",
+		o.WaitUntilClickable)
+	registerStateWait("wait_until_checked",
+		"Poll until the matched element is checked.",
+		o.WaitUntilChecked)
+	registerStateWait("wait_until_focused",
+		"Poll until the matched element has focus. Useful for keyboard-driven flows where focus lands asynchronously after a click.",
+		o.WaitUntilFocused)
 
 	addDeviceTool("wait_for_idle",
 		"Approximate Espresso onIdle / Compose waitForIdle: poll the tree until it stops changing for idleWindowMs. Heuristic — there is no real IdlingResource hook from outside the app.",
