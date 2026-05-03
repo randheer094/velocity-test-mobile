@@ -20,10 +20,11 @@ examples/sample-skill/
     vocabulary.md                ← verb → tool translation key
     preparation.md               ← Standard pre-conditions + resetNotes
     teardown.md                  ← Standard cleanup
+    flows.md                     ← login, goToHome, logout (reusable named procedures)
   tests/
-    01-login.md                  ← 2 tests
-    02-note-list.md              ← 2 tests
-    03-edit-note.md              ← 1 test (exception cases)
+    01-login.md                  ← 2 tests (verifies flows.md → login)
+    02-note-list.md              ← 2 tests (uses flows.md → login + goToHome)
+    03-edit-note.md              ← 1 test (uses flows.md, exception cases)
 ```
 
 ## Preflight — run before walking any test
@@ -53,8 +54,9 @@ does not boot the emulator or build the APK on the user's behalf.
 For every test in a file:
 
 1. Read the test file end-to-end, plus every fixture it references
-   (`fixtures/preparation.md`, `fixtures/teardown.md`, and
-   `fixtures/vocabulary.md` for the verb mapping).
+   (`fixtures/preparation.md`, `fixtures/teardown.md`,
+   `fixtures/flows.md`, and `fixtures/vocabulary.md` for the verb
+   mapping).
 2. Resolve schemas for unfamiliar MCP tools the first time you hit them
    via `ToolSearch select:mcp__velocity-test-mobile__<name>`.
 3. Apply **Pre-conditions** — usually `fixtures/preparation.md → Standard

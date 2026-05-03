@@ -9,7 +9,10 @@ assertion runs.
 
 The default reset. Brings the device and the app to a known starting
 state: animations off, app data cleared, runtime permissions pre-granted,
-app launched on its home screen.
+app launched on its **login screen** (no session, since step 2 cleared
+data). Tests that need an authenticated session compose this with
+`fixtures/flows.md → login`; tests that test the login flow itself walk
+their assertions from this state directly.
 
 1. Disable system animations.
 2. Reset app data for `com.example.notes`.
@@ -17,11 +20,11 @@ app launched on its home screen.
    prompt does not steal focus when the app first posts.
 4. Launch `com.example.notes`.
 5. Wait for the screen to settle.
-6. *"All notes"* appears within 5s. (This is the home-screen marker; if
-   it doesn't show, the launch failed or the app crashed during start.)
+6. *"Sign in"* appears within 5s. (This is the login-screen marker;
+   step 2 wiped any saved session, so the app always boots here.)
 
 > **Why pre-grant before launch?** Android shows the runtime permission
-> dialog the first time the app requests it, which races with the home
+> dialog the first time the app requests it, which races with the
 > screen and breaks deterministic selectors. Granting via
 > `permission_grant` before `app_launch` avoids the prompt entirely.
 
@@ -38,13 +41,16 @@ prose above, not this table.
 | 3 | `permission_grant({ package: "com.example.notes", permission: "android.permission.POST_NOTIFICATIONS" })` |
 | 4 | `app_launch({ package: "com.example.notes" })` |
 | 5 | `wait_for_idle({ idleWindowMs: 800 })` |
-| 6 | `wait_until_visible({ match: { text: "All notes" }, timeoutMs: 5000 })` |
+| 6 | `wait_until_visible({ match: { text: "Sign in" }, timeoutMs: 5000 })` |
 
 ## resetNotes
 
 Sub-procedure for tests that need a deterministic set of seeded notes.
-Run **after** `Standard pre-conditions`. Two paths — prefer the intent
-fast-path; fall back to the UI if the debug intent doesn't seed.
+Run **after** `Standard pre-conditions` plus `fixtures/flows.md → login`
+plus `fixtures/flows.md → goToHome` — the seed broadcast targets a
+table that only exists once the user is authenticated. Two paths —
+prefer the intent fast-path; fall back to the UI if the debug intent
+doesn't seed.
 
 ### Fast path: debug intent
 

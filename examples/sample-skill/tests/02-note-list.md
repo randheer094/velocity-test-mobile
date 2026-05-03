@@ -6,13 +6,17 @@
 
 ## File-level pre-conditions (run before every test in this file)
 
-1. Run `fixtures/preparation.md` → **Standard pre-conditions**.
-2. Run `fixtures/preparation.md` → **resetNotes** (seeds five notes
+1. Run `fixtures/preparation.md` → **Standard pre-conditions** (ends
+   on the login screen).
+2. Run `fixtures/flows.md` → `login` (now on the welcome / home
+   screen).
+3. Run `fixtures/flows.md` → `goToHome` (no-op when already there;
+   defensive against post-login interstitials).
+4. Run `fixtures/preparation.md` → **resetNotes** (seeds five notes
    titled `Note 1` … `Note 5`).
 
-These tests assume the user is already authenticated; the Notes app
-remembers the session across launches in debug builds. If a future
-release breaks that assumption, prepend Test 1 of `01-login.md` here.
+The `login` step is shared with file 03; if the procedure regresses,
+fix `flows.md` once instead of duplicating the change here.
 
 ---
 

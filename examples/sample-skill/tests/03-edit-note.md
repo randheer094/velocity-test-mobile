@@ -11,8 +11,11 @@ numeric tolerance.
 
 ## File-level pre-conditions
 
-1. Run `fixtures/preparation.md` → **Standard pre-conditions**.
-2. Run `fixtures/preparation.md` → **resetNotes** (seeds five notes).
+1. Run `fixtures/preparation.md` → **Standard pre-conditions** (ends
+   on the login screen).
+2. Run `fixtures/flows.md` → `login`.
+3. Run `fixtures/flows.md` → `goToHome`.
+4. Run `fixtures/preparation.md` → **resetNotes** (seeds five notes).
 
 ---
 

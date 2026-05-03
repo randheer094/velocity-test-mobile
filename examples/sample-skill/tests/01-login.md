@@ -8,18 +8,22 @@ timeout `5s`; default scroll attempts `30`.
 
 ## File-level pre-conditions (run before every test in this file)
 
-Run `fixtures/preparation.md` → **Standard pre-conditions**, except
-*step 6* — these tests start on the **login** screen, not the home
-screen. Replace step 6 with:
+Run `fixtures/preparation.md` → **Standard pre-conditions** (which ends
+on the login screen — perfect for these tests).
 
-> *"Sign in" is shown within 5s.* (The login screen's title.)
-
-This per-file override is the one place pre-conditions deviate; tests in
-files 02 and 03 use the standard sequence verbatim.
+These tests do **not** call `fixtures/flows.md → login` as a
+pre-condition: Test 1 *is* the canonical assertion that the login
+procedure works, and Test 2 deliberately exercises a wrong-credentials
+branch.
 
 ---
 
 ## Test 1: valid credentials land on the home screen
+
+This test walks the same five steps as `fixtures/flows.md → login` and
+adds post-login state assertions. If this test passes, every other test
+in the suite that uses `flows.md → login` as a pre-condition can trust
+the procedure.
 
 ### Steps
 
@@ -29,7 +33,8 @@ files 02 and 03 use the standard sequence verbatim.
 3. Type `s3cret` into the Password field.
 4. Tap "Sign in".
 5. "Welcome, alice" appears within 10s.
-6. The notes list shows exactly 5 rows, all clickable.
+6. The notes list is empty (a fresh session has no notes until
+   `resetNotes` seeds them).
 
 ### Cleanup
 
