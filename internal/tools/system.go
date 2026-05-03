@@ -401,11 +401,11 @@ func registerSystemState(s *mcp.Server, d *Deps) {
 		if err := d.State.SetBattery(ctx, dev, st); err != nil {
 			return errResult(err)
 		}
-		levelOut := -1
+		out := map[string]any{"ok": true, "status": args.Status, "ac": args.AC, "usb": args.USB, "wireless": args.Wireless}
 		if args.Level != nil {
-			levelOut = *args.Level
+			out["level"] = *args.Level
 		}
-		return jsonResult(map[string]any{"ok": true, "level": levelOut, "status": args.Status, "ac": args.AC, "usb": args.USB, "wireless": args.Wireless})
+		return jsonResult(out)
 	})
 
 	type networkArgs struct {

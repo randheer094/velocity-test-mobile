@@ -84,7 +84,7 @@ func (s *StateClient) SetBattery(ctx context.Context, deviceID string, st Batter
 	var ops []kv
 	if st.Level >= 0 && st.Level <= 100 {
 		ops = append(ops, kv{"level", fmt.Sprintf("%d", st.Level)})
-	} else if st.Level != 0 && (st.Level < 0 || st.Level > 100) {
+	} else if st.Level != -1 {
 		return fmt.Errorf("battery level must be 0..100, got %d", st.Level)
 	}
 	if st.Status != 0 {
