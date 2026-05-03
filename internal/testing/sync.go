@@ -164,6 +164,60 @@ func (o *Orchestrator) WaitUntilCount(ctx context.Context, deviceID string, m *m
 	return res, nil
 }
 
+// waitUntilState polls until the matched element satisfies the predicate.
+// Shared backbone for state-change waits (enabled, clickable, checked, focused).
+func (o *Orchestrator) waitUntilState(ctx context.Context, deviceID string, m *matcher.Matcher, timeoutMs, intervalMs int, satisfied func(ui.Element) bool, label string) (WaitResult, error) {
+	if m == nil || m.IsEmpty() {
+		return WaitResult{}, matcher.ErrEmptyMatcher
+	}
+	start := time.Now()
+	var lastFound *ui.Element
+	attempts, ok, _ := pollUntil(ctx, timeoutMs, intervalMs, func(ctx context.Context) (bool, error) {
+		root, err := o.Layout.Tree(ctx, deviceID)
+		if err != nil {
+			return false, err
+		}
+		all, _ := matcher.FindAll(root, m)
+		for _, e := range all {
+			if satisfied(e) {
+				ec := e
+				lastFound = &ec
+				return true, nil
+			}
+		}
+		return false, nil
+	})
+	res := WaitResult{Attempts: attempts, WaitedMs: time.Since(start).Milliseconds(), OK: ok, Element: lastFound}
+	if !ok {
+		res.Reason = "timed out waiting for element to be " + label
+	}
+	return res, nil
+}
+
+// WaitUntilEnabled — poll until the matcher resolves to an enabled node.
+func (o *Orchestrator) WaitUntilEnabled(ctx context.Context, deviceID string, m *matcher.Matcher, timeoutMs, intervalMs int) (WaitResult, error) {
+	return o.waitUntilState(ctx, deviceID, m, timeoutMs, intervalMs,
+		func(e ui.Element) bool { return e.Enabled }, "enabled")
+}
+
+// WaitUntilClickable — poll until the matcher resolves to a clickable node.
+func (o *Orchestrator) WaitUntilClickable(ctx context.Context, deviceID string, m *matcher.Matcher, timeoutMs, intervalMs int) (WaitResult, error) {
+	return o.waitUntilState(ctx, deviceID, m, timeoutMs, intervalMs,
+		func(e ui.Element) bool { return e.Clickable }, "clickable")
+}
+
+// WaitUntilChecked — poll until the matcher resolves to a checked node.
+func (o *Orchestrator) WaitUntilChecked(ctx context.Context, deviceID string, m *matcher.Matcher, timeoutMs, intervalMs int) (WaitResult, error) {
+	return o.waitUntilState(ctx, deviceID, m, timeoutMs, intervalMs,
+		func(e ui.Element) bool { return e.Checked }, "checked")
+}
+
+// WaitUntilFocused — poll until the matcher resolves to a focused node.
+func (o *Orchestrator) WaitUntilFocused(ctx context.Context, deviceID string, m *matcher.Matcher, timeoutMs, intervalMs int) (WaitResult, error) {
+	return o.waitUntilState(ctx, deviceID, m, timeoutMs, intervalMs,
+		func(e ui.Element) bool { return e.Focused }, "focused")
+}
+
 // WaitForIdle approximates Espresso onIdle() / Compose waitForIdle by
 // polling the accessibility tree and waiting for two consecutive snapshots
 // to hash identically over an `idleWindowMs` window.
