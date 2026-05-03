@@ -1,6 +1,6 @@
 # Tool reference
 
-104 tools, grouped by purpose. Every device-targeted tool accepts an optional `device` argument (omit when only one device is connected). Every matcher-bearing tool takes a `match` object — see [MATCHERS.md](MATCHERS.md) for the field reference.
+129 tools, grouped by purpose. Every device-targeted tool accepts an optional `device` argument (omit when only one device is connected). Every matcher-bearing tool takes a `match` object — see [MATCHERS.md](MATCHERS.md) for the field reference.
 
 ## Conventions
 
@@ -58,6 +58,19 @@ inside the MCP contract instead of falling back to `Bash` for `adb shell`.
 | `notification_tap` | no | `bundle_id`, `channel_id?`, `title_match?` | Higher-level convenience: opens the shade, finds a matching notification by title/text via the testing matcher, clicks it, collapses the shade. |
 | `shell_exec` | no | `command`, `timeout_ms?` (default 10000) | Documented backstop for arbitrary `adb shell <command>`. Returns `{ stdout, stderr, exit_code }` regardless of exit status. Prefer the typed wrappers above; reach for this only for one-off introspection (new dumpsys services, debug-only setprop). |
 
+## Device-state simulation
+
+Test-time environmental knobs. None of these survive a device reboot — call them at the start of each session and (for `battery_set_state`) reset before exit.
+
+| Tool | Read-only | Args | Behaviour |
+| --- | --- | --- | --- |
+| `device_set_font_scale` | no | `scale: number` (0.5..2.5) | `settings put system font_scale <v>`. Drives accessibility / large-text regression tests. |
+| `device_set_dark_mode` | no | `mode: "yes"|"no"|"auto"` | `cmd uimode night yes|no|auto`. |
+| `airplane_mode_set` | no | `on: bool` | `cmd connectivity airplane-mode enable|disable`. |
+| `battery_set_state` | no | `reset?: bool`, `level?: 0..100`, `status?: 1..5`, `ac?: 1|2`, `usb?: 1|2`, `wireless?: 1|2` | `dumpsys battery set ...`. Pair test-time overrides with `{reset: true}` in cleanup; otherwise the device reports fake state until reboot. Status codes: 1 unknown · 2 charging · 3 discharging · 4 not_charging · 5 full. AC/USB/wireless: 1 unplugged, 2 plugged. |
+| `network_set` | no | `wifi?: bool`, `mobile?: bool` | `svc wifi enable|disable`, `svc data enable|disable`. Set only the radios you want to change. |
+| `app_set_locale` | no | `package`, `tag?` | `cmd locale set-app-locales`. Empty `tag` clears the override. Distinct from `app_launch.locale` (per-launch only). |
+
 ## Screen capture & visual regression
 
 | Tool | Read-only | Args | Behaviour |
@@ -77,6 +90,10 @@ inside the MCP contract instead of falling back to `Bash` for `adb shell`.
 | `clipboard_set` | no | `text` | Write primary clipboard. Unicode-safe via base64. |
 | `press_key` | no | `key` | `input keyevent <code>` for any key in [the keycode map](#keycode-map). |
 | `type_into_focused` | no | `text`, `submit?` | Type into whichever view currently has focus (Espresso `typeTextIntoFocusedView`). |
+| `tap_at_coordinates` | no | `x`, `y` | Raw `input tap`. Fallback for Canvas / WebView surfaces a matcher cannot resolve. |
+| `long_press_at_coordinates` | no | `x`, `y`, `durationMs?` (800) | Raw long-press. |
+| `swipe_screen` | no | `fromX`, `fromY`, `toX`, `toY`, `durationMs?` (200) | Free-form swipe between two coordinates — edge swipes, pull-to-refresh. |
+| `drag_screen` | no | `fromX`, `fromY`, `toX`, `toY`, `durationMs?` (800) | Same dispatch as `swipe_screen` but with a longer default so apps that distinguish drag from swipe register the gesture. |
 
 ## Logs
 
@@ -84,6 +101,9 @@ inside the MCP contract instead of falling back to `Bash` for `adb shell`.
 | --- | --- | --- | --- |
 | `logcat_tail` | yes | `package?`, `tag?`, `priority?`, `maxLines?`, `since?`, `regex?` | `logcat -d` with the given filterspec; `package` is resolved to a PID via `pidof`. `regex` is post-filtered in Go. |
 | `logcat_clear` | no | — | `logcat -c`. |
+| `screen_record_start` | no | `local_file`, `max_duration_s?`, `size_width?`, `size_height?`, `bit_rate?` | Begins `adb shell screenrecord` in the background, writing to `/sdcard/`. One active recording per device. |
+| `screen_record_stop` | no | — | Cancels the active recording, pulls the MP4 to the path passed to `screen_record_start`, and removes the device-side temp. Returns `{ local_file, remote_file, duration_ms }`. |
+| `pull_file` | no | `remote`, `local` | `adb pull` for arbitrary paths (`/sdcard/`, `/data/local/tmp/`). For debuggable-app private storage, prefer `app_data_read`. |
 
 ---
 
@@ -116,12 +136,14 @@ All assertion tools are read-only and return an `AssertResult`. They re-snapshot
 | Tool | Maps to |
 | --- | --- |
 | `assert_clickable` | `isClickable()` / Compose `assertHasClickAction()` |
+| `assert_long_clickable` | `isLongClickable()` |
 | `assert_enabled` / `assert_disabled` | `isEnabled()` / `isNotEnabled()` |
 | `assert_focused` | `hasFocus()` |
 | `assert_selected` | `isSelected()` |
 | `assert_checked` / `assert_unchecked` | `isChecked()` / `isNotChecked()` |
 | `assert_on` / `assert_off` | Compose `assertIsOn()` / `assertIsOff()` |
 | `assert_toggleable` | Compose `assertIsToggleable()` |
+| `assert_has_ime_action` | Espresso `hasImeAction()` — best effort: focusable + editable class. |
 
 ### Text & content description
 
@@ -129,7 +151,12 @@ All assertion tools are read-only and return an `AssertResult`. They re-snapshot
 | --- | --- | --- |
 | `assert_text_equals` | `expected: string` | Compose `assertTextEquals()` |
 | `assert_text_contains` | `substring: string` | Compose `assertTextContains()` |
+| `assert_text_regex` | `pattern: string` | Espresso `withText(matchesPattern())` — Go regex (RE2). |
 | `assert_content_description_equals` | `expected: string` | Compose `assertContentDescriptionEquals()` |
+| `assert_content_description_contains` | `substring: string` | Substring complement to `_equals`. |
+| `assert_error_text_equals` | `expected: string` | Espresso `hasErrorText(text)` for form-validation labels. |
+| `assert_hint_equals` | `expected: string` | Espresso `withHint(text)`. |
+| `assert_input_type` | `class_substring: string` | Espresso `withInputType(...)` — externally approximated by class substring. |
 
 ### Geometry (require explicit `density`)
 
@@ -177,6 +204,7 @@ All action tools return an `ActionResult`. They re-snapshot the tree, locate the
 | `slow_swipe_node` | `direction` | Espresso `slowSwipeLeft`/etc. (~1500ms) |
 | `scroll_to` | `container?: <matcher>`, `maxAttempts?: int` (12), `direction?: "auto"|"up"|"down"|"left"|"right"` | Espresso `scrollTo()` / Compose `performScrollToNode()`. With `container` set, restrict swipes to that scrollable; otherwise the largest visible scrollable is used. |
 | `scroll_to_index` | `index: int`, `direction?: "up"|"down"|"left"|"right"` (default "up") | Compose `performScrollToIndex()`. External approximation — dispatches `index` page-sized swipes. |
+| `drag_node` | `from: <matcher>`, `to: <matcher>`, `durationMs?: int` (600) | Drag the centre of `from` to the centre of `to`. Reorderable lists, drag-and-drop, slider thumbs. |
 | `perform_ime_action` | — | Espresso `pressImeActionButton()` |
 | `perform_key_press` | `key: string`, `ctrl?`, `shift?`, `alt?` | Compose `performKeyPress()`. Modifiers use `input keycombination` on Android 12+; on older devices the key alone is dispatched and the result reports the missing coverage. |
 | `assert_clickable_and_click` | — | Convenience: assert clickable then click. Returns the combined assert + click result. |
@@ -192,6 +220,10 @@ All action tools return an `ActionResult`. They re-snapshot the tree, locate the
 | `wait_until_text` | `match`, `expected: string`, `timeoutMs?`, `intervalMs?` | Poll until any matched element contains `expected` text. |
 | `wait_until_count` | `match`, `count: int`, `timeoutMs?`, `intervalMs?` | Poll until matcher resolves to exactly `count` nodes. |
 | `wait_until_at_least_one_exists` | `match`, `count?: int` (default 1), `timeoutMs?`, `intervalMs?` | Poll until at least `count` nodes match (Compose `waitUntilAtLeastOneExists`). |
+| `wait_until_enabled` | `match`, `timeoutMs?`, `intervalMs?` | Poll until the matched element is enabled (e.g. button enables after form fills). |
+| `wait_until_clickable` | `match`, `timeoutMs?`, `intervalMs?` | Poll until the matched element is clickable. |
+| `wait_until_checked` | `match`, `timeoutMs?`, `intervalMs?` | Poll until the matched element is checked. |
+| `wait_until_focused` | `match`, `timeoutMs?`, `intervalMs?` | Poll until the matched element has focus. |
 | `wait_for_idle` | `timeoutMs?`, `idleWindowMs?` (default 500) | Heuristic for `Espresso.onIdle()` — poll the tree, wait for two snapshots to hash identically over the idle window. |
 
 ## Espresso top-level

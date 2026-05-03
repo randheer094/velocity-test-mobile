@@ -17,6 +17,16 @@ repo root for the full vocabulary.
 | *"X exists"* / *"X is present in the tree"* | `assert_exists({ match: ... })` |
 | *"X does not exist"* | `assert_does_not_exist({ match: ... })` |
 
+## Text & content description
+
+| Verb in the runbook | Tool the agent dispatches |
+| --- | --- |
+| *"the X reads Y"* | `assert_text_equals({ match: ..., expected: "Y" })` |
+| *"the X reads something with Y in it"* | `assert_text_contains({ match: ..., substring: "Y" })` |
+| *"the X matches the pattern P"* | `assert_text_regex({ match: ..., pattern: "P" })` |
+| *"the X says \"Required\""* (form error) | `assert_error_text_equals({ match: ..., expected: "Required" })` |
+| *"the placeholder is Y"* | `assert_hint_equals({ match: ..., expected: "Y" })` |
+
 ## Tap, type, swipe
 
 | Verb in the runbook | Tool the agent dispatches |
@@ -39,6 +49,10 @@ repo root for the full vocabulary.
 | *"X appears within Ns"* | `wait_until_visible({ match: ..., timeoutMs: N*1000 })` |
 | *"X disappears within Ns"* | `wait_until_not_visible({ match: ..., timeoutMs: N*1000 })` |
 | *"X reads exactly Y within Ns"* | `wait_until_text({ match: ..., expected: "Y", timeoutMs: N*1000 })` |
+| *"X becomes enabled within Ns"* | `wait_until_enabled({ match: ..., timeoutMs: N*1000 })` |
+| *"X becomes clickable within Ns"* | `wait_until_clickable({ ..., timeoutMs: N*1000 })` |
+| *"X is checked within Ns"* | `wait_until_checked({ ..., timeoutMs: N*1000 })` |
+| *"focus lands on X within Ns"* | `wait_until_focused({ ..., timeoutMs: N*1000 })` |
 | *"wait for the screen to settle"* | `wait_for_idle({ idleWindowMs: 800 })` |
 
 If the test omits "within Ns", use the default 5000ms from `SKILL.md`.
@@ -52,6 +66,7 @@ If the test omits "within Ns", use the default 5000ms from `SKILL.md`.
 | *"at least one row matches X"* | `assert_any({ match: ..., sub: { ... } })` |
 | *"the Kth row is selected"* | `assert_selected({ match: { ..., parentIndex: K-1 } })` |
 | *"scroll the list until X is visible"* | `scroll_to({ match: { text: "X" }, container: ..., maxAttempts: 30 })` |
+| *"drag the row labelled X above the row labelled Y"* | `drag_node({ from: { text: "X" }, to: { text: "Y" } })` |
 
 ## App / system lifecycle
 
@@ -76,8 +91,40 @@ If the test omits "within Ns", use the default 5000ms from `SKILL.md`.
 | Verb in the runbook | Tool the agent dispatches |
 | --- | --- |
 | *"capture a screenshot"* | `screen_capture({ saveTo: "/tmp/<test-id>.png" })` |
+| *"start recording the screen"* | `screen_record_start({ local_file: "/tmp/<test-id>.mp4" })` |
+| *"stop recording"* | `screen_record_stop({})` |
+| *"pull the file from /sdcard/foo to /tmp/foo"* | `pull_file({ remote: "/sdcard/foo", local: "/tmp/foo" })` |
 | *"dump the tree"* | `print_tree({})` |
 | *"clear logcat"* | `logcat_clear({})` |
+
+## Coordinate-level fallback
+
+Use these only when no matcher resolves the target — custom Canvas, ad
+WebViews, unlabelled drawing surfaces. Prefer the semantic verbs
+(`tap X` → `find_node` + `click`) for ordinary UI.
+
+| Verb in the runbook | Tool the agent dispatches |
+| --- | --- |
+| *"tap (x,y)"* | `tap_at_coordinates({ x, y })` |
+| *"long-press (x,y)"* | `long_press_at_coordinates({ x, y })` |
+| *"swipe from (x1,y1) to (x2,y2)"* | `swipe_screen({ fromX, fromY, toX, toY })` |
+| *"drag from (x1,y1) to (x2,y2)"* | `drag_screen({ fromX, fromY, toX, toY })` |
+
+## Device-state simulation
+
+Environmental knobs that runbook pre-conditions / cleanup steps use to
+bracket a test. None of these survive a device reboot — call them at
+session start.
+
+| Verb in the runbook | Tool the agent dispatches |
+| --- | --- |
+| *"set the system to dark mode"* | `device_set_dark_mode({ mode: "yes" })` |
+| *"set font scale to 1.3"* | `device_set_font_scale({ scale: 1.3 })` |
+| *"turn on airplane mode"* | `airplane_mode_set({ on: true })` |
+| *"simulate battery at 15%, discharging"* | `battery_set_state({ level: 15, status: 3 })` |
+| *"reset battery state"* (cleanup) | `battery_set_state({ reset: true })` |
+| *"disable wifi but keep mobile data"* | `network_set({ wifi: false, mobile: true })` |
+| *"set the app's locale to ja-JP"* | `app_set_locale({ package, tag: "ja-JP" })` |
 
 ## When prose is not enough — drop to explicit syntax
 
