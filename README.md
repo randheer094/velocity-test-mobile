@@ -174,7 +174,7 @@ Every assert / act / wait tool takes a `match` selector with the same JSON shape
 
 See [`docs/MATCHERS.md`](docs/MATCHERS.md) for the field-by-field reference and [`docs/EXAMPLES.md`](docs/EXAMPLES.md) for realistic flows.
 
-## Tools at a glance (129)
+## Tools at a glance (130)
 
 | Group | Examples |
 | --- | --- |
@@ -189,7 +189,7 @@ See [`docs/MATCHERS.md`](docs/MATCHERS.md) for the field-by-field reference and 
 | **Sync** | `wait_until_visible`, `wait_until_not_visible`, `wait_until_text`, `wait_until_count`, `wait_until_at_least_one_exists`, `wait_until_enabled`, `wait_until_clickable`, `wait_until_checked`, `wait_until_focused`, `wait_for_idle` |
 | **Espresso top-level** | `espresso_press_back`, `press_back_unconditionally`, `close_soft_keyboard`, `open_overflow_menu`, `open_contextual_action_mode_menu` |
 | **Intents (recording-only)** | `intent_monitor_start`, `intent_monitor_stop`, `intent_list_captured`, `assert_intent_sent`, `assert_intent_count` |
-| **Test fixtures** | `device_list`, `device_get_screen_size`, `device_get_props`, `device_get_orientation`, `device_set_orientation`, `animations_set`, `animations_get`, `app_list`, `app_launch`, `app_terminate`, `app_clear_data`, `app_get_info`, `permission_grant`, `permission_revoke`, `appops_set`, `appops_get`, `intent_send`, `app_data_list`, `app_data_read`, `screen_capture`, `screen_layout`, `screen_resolve`, `screen_diff`, `clipboard_get`, `clipboard_set`, `press_key`, `type_into_focused`, `tap_at_coordinates`, `long_press_at_coordinates`, `swipe_screen`, `drag_screen`, `logcat_tail`, `logcat_clear`, `screen_record_start`, `screen_record_stop`, `pull_file` |
+| **Test fixtures** | `device_list`, `device_get_screen_size`, `device_get_props`, `device_get_orientation`, `device_set_orientation`, `animations_set`, `animations_get`, `app_list`, `app_install`, `app_launch`, `app_terminate`, `app_clear_data`, `app_get_info`, `permission_grant`, `permission_revoke`, `appops_set`, `appops_get`, `intent_send`, `app_data_list`, `app_data_read`, `screen_capture`, `screen_layout`, `screen_resolve`, `screen_diff`, `clipboard_get`, `clipboard_set`, `press_key`, `type_into_focused`, `tap_at_coordinates`, `long_press_at_coordinates`, `swipe_screen`, `drag_screen`, `logcat_tail`, `logcat_clear`, `screen_record_start`, `screen_record_stop`, `pull_file` |
 | **Activity / service / location / shell** | `activity_get_top`, `activity_wait_for_top`, `activity_start`, `service_get_state`, `service_wait_for_state`, `location_get_last_known`, `notification_list`, `notification_shade_set`, `notification_tap`, `shell_exec` |
 | **Device-state simulation** | `device_set_font_scale`, `device_set_dark_mode`, `airplane_mode_set`, `battery_set_state`, `network_set`, `app_set_locale` |
 

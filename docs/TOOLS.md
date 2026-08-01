@@ -1,6 +1,6 @@
 # Tool reference
 
-129 tools, grouped by purpose. Every device-targeted tool accepts an optional `device` argument (omit when only one device is connected). Every matcher-bearing tool takes a `match` object — see [MATCHERS.md](MATCHERS.md) for the field reference.
+130 tools, grouped by purpose. Every device-targeted tool accepts an optional `device` argument (omit when only one device is connected). Every matcher-bearing tool takes a `match` object — see [MATCHERS.md](MATCHERS.md) for the field reference.
 
 ## Conventions
 
@@ -28,6 +28,7 @@
 | Tool | Read-only | Args | Behaviour |
 | --- | --- | --- | --- |
 | `app_list` | yes | — | Apps with launcher activities, parsed from `cmd package query-activities`. |
+| `app_install` | no | `apkPath`, `package?` | Installs an APK from a host path. Prefers `android run --apks=` when the agent CLI is available, falling back to `adb install -r`. If `package` is set, skips the install when that package is already on the device (idempotent test setup). |
 | `app_launch` | no | `package`, `locale?` | `monkey` to launch; optional `cmd locale set-app-locales`. |
 | `app_terminate` | no | `package`, `kind?` (`force_stop` default / `kill`) | Two modes. `force_stop` → `am force-stop`: hard stop, marks package STOPPED, cancels alarms/jobs, drops queued broadcasts, blocks service auto-restart until next launch — use for clean test teardown. `kill` → `am kill`: soft kill of cached/background process only (no-op in foreground), leaves package state intact so `START_STICKY` services restart, alarms still fire, broadcasts still deliver — use to simulate OS memory reclamation (e.g. `START_STICKY` recovery, JobService re-run). |
 | `app_clear_data` | no (destructive) | `package` | `pm clear`. |

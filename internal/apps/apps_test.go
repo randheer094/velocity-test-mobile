@@ -96,6 +96,25 @@ func contains(haystack []string, needle string) bool {
 	return false
 }
 
+func TestIsAmbiguousActivityOutput(t *testing.T) {
+	ambiguous := `App loaded: com.example.app
+Debuggable: true
+Multiple candidates found for type ACTIVITY:
+  - com.example.app.OtherActivity
+  - com.example.app.MainActivity
+Please specify component using --activity <name>`
+	if !isAmbiguousActivityOutput(ambiguous) {
+		t.Errorf("expected ambiguous-activity output to be detected")
+	}
+
+	clean := `App loaded: com.example.app
+Debuggable: true
+Activity started: com.example.app/.MainActivity`
+	if isAmbiguousActivityOutput(clean) {
+		t.Errorf("expected clean install+launch output not to be flagged")
+	}
+}
+
 func TestSafeRelPath(t *testing.T) {
 	good := map[string]string{
 		"":                          ".",
