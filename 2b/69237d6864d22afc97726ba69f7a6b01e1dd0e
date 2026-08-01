@@ -1,0 +1,52 @@
+internal/tools/app.go
+  s_fa9835e20b02ee::t_6a5142b39089e7 13-15,17-19
+  s_fa9835e20b02ee::t_c560902123af36 40-70
+internal/apps/apps_test.go
+  s_388c154db7db2e::t_a5ac8af2e04442 99-117
+internal/version/VERSION
+  s_0618e54bd3a93e::t_c436ccfac5ca7f 1
+docs/TOOLS.md
+  s_0618e54bd3a93e::t_28ff25e1aceb48 3
+  s_0618e54bd3a93e::t_151f6af62e5625 31
+internal/apps/apps.go
+  s_388c154db7db2e::t_b9bc0e44910420 66-72,88,90-94
+  s_388c154db7db2e::t_a3d68f8101390f 73-78
+  s_388c154db7db2e::t_a030a66d549757 89
+README.md
+  s_0618e54bd3a93e::t_30a3a266d84e94 177
+  s_0618e54bd3a93e::t_d815148d54d220 192
+internal/tools/register.go
+  s_fa9835e20b02ee::t_78076afe3e1370 30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "2b69237d6864d22afc97726ba69f7a6b01e1dd0e",
+  "prompts": {},
+  "sessions": {
+    "s_0618e54bd3a93e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "67363679-9c97-496d-b608-1bd34ab57083",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Randheer <randheer.singh@foodpanda.com>"
+    },
+    "s_388c154db7db2e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb815541-1812-4606-b785-a59541d491a9",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Randheer <randheer.singh@foodpanda.com>"
+    },
+    "s_fa9835e20b02ee": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "66803032-cec9-4f99-b668-43a927f2411b",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Randheer <randheer.singh@foodpanda.com>"
+    }
+  }
+}
