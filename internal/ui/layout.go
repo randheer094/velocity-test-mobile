@@ -5,14 +5,11 @@ package ui
 import (
 	"context"
 	"encoding/json"
-	"encoding/xml"
-	"errors"
 	"fmt"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/randheer094/velocity-test-mobile/internal/adb"
 	"github.com/randheer094/velocity-test-mobile/internal/androidcli"
@@ -69,16 +66,14 @@ func NewLayoutClient(a *adb.Client, c *androidcli.Client) *LayoutClient {
 	return &LayoutClient{Adb: a, AndroidCLI: c}
 }
 
-// Tree returns a hierarchical layout. Prefers `android layout --pretty` JSON
-// when the agent CLI is installed; falls back to UIAutomator XML.
+// Tree returns a hierarchical layout via `android layout --pretty` JSON. The
+// `android` agent CLI is required — returns androidcli.ErrNotInstalled if
+// it isn't on PATH.
 func (l *LayoutClient) Tree(ctx context.Context, deviceID string) (Element, error) {
-	if l.AndroidCLI != nil && l.AndroidCLI.Available() {
-		if tree, err := l.fromAndroidCLI(ctx, deviceID); err == nil {
-			return tree, nil
-		}
-		// Soft-fall through on CLI error to give the UIAutomator path a chance.
+	if l.AndroidCLI == nil || !l.AndroidCLI.Available() {
+		return Element{}, androidcli.ErrNotInstalled
 	}
-	return l.fromUIAutomator(ctx, deviceID)
+	return l.fromAndroidCLI(ctx, deviceID)
 }
 
 func (l *LayoutClient) fromAndroidCLI(ctx context.Context, deviceID string) (Element, error) {
@@ -193,113 +188,6 @@ func parseBoundsJSON(raw json.RawMessage) Bounds {
 		}
 	}
 	return Bounds{}
-}
-
-// uiautomator XML path -----------------------------------------------------
-
-type xmlNode struct {
-	XMLName       xml.Name  `xml:"node"`
-	Class         string    `xml:"class,attr"`
-	Text          string    `xml:"text,attr"`
-	ContentDesc   string    `xml:"content-desc,attr"`
-	Hint          string    `xml:"hint,attr"`
-	ResourceID    string    `xml:"resource-id,attr"`
-	Package       string    `xml:"package,attr"`
-	Bounds        string    `xml:"bounds,attr"`
-	Focused       string    `xml:"focused,attr"`
-	Focusable     string    `xml:"focusable,attr"`
-	Checkable     string    `xml:"checkable,attr"`
-	Checked       string    `xml:"checked,attr"`
-	Clickable     string    `xml:"clickable,attr"`
-	LongClickable string    `xml:"long-clickable,attr"`
-	Scrollable    string    `xml:"scrollable,attr"`
-	Selected      string    `xml:"selected,attr"`
-	Enabled       string    `xml:"enabled,attr"`
-	VisibleToUser string    `xml:"visible-to-user,attr"`
-	Children      []xmlNode `xml:"node"`
-}
-
-type xmlHierarchy struct {
-	XMLName xml.Name  `xml:"hierarchy"`
-	Nodes   []xmlNode `xml:"node"`
-}
-
-func (l *LayoutClient) fromUIAutomator(ctx context.Context, deviceID string) (Element, error) {
-	var lastErr error
-	for attempt := 0; attempt < 10; attempt++ {
-		raw, err := l.Adb.ExecOut(ctx, deviceID, "uiautomator", "dump", "/dev/tty")
-		if err == nil {
-			cleaned := stripDumpTrailer(raw)
-			if h, perr := parseUIAutomatorXML(cleaned); perr == nil && len(h.Nodes) > 0 {
-				return convertXMLRoot(h), nil
-			} else if perr != nil {
-				lastErr = perr
-			}
-		} else {
-			lastErr = err
-		}
-		select {
-		case <-ctx.Done():
-			return Element{}, ctx.Err()
-		case <-time.After(100 * time.Millisecond):
-		}
-	}
-	if lastErr == nil {
-		lastErr = errors.New("uiautomator returned an empty hierarchy")
-	}
-	return Element{}, lastErr
-}
-
-func stripDumpTrailer(b []byte) []byte {
-	s := string(b)
-	if i := strings.LastIndex(s, "UI hierarchy dumped to:"); i > 0 {
-		s = s[:i]
-	}
-	s = strings.TrimSpace(s)
-	return []byte(s)
-}
-
-func parseUIAutomatorXML(data []byte) (xmlHierarchy, error) {
-	var h xmlHierarchy
-	dec := xml.NewDecoder(strings.NewReader(string(data)))
-	dec.Strict = false
-	err := dec.Decode(&h)
-	return h, err
-}
-
-func convertXMLRoot(h xmlHierarchy) Element {
-	root := Element{Class: "hierarchy"}
-	for _, n := range h.Nodes {
-		root.Children = append(root.Children, convertXMLNode(n))
-	}
-	return root
-}
-
-func convertXMLNode(n xmlNode) Element {
-	b, _ := parseBoundsString(n.Bounds)
-	e := Element{
-		Class:         n.Class,
-		Text:          n.Text,
-		Label:         n.ContentDesc,
-		Hint:          n.Hint,
-		ResourceID:    n.ResourceID,
-		Package:       n.Package,
-		Focused:       n.Focused == "true",
-		Focusable:     n.Focusable == "true",
-		Checkable:     n.Checkable == "true",
-		Checked:       n.Checked == "true",
-		Clickable:     n.Clickable == "true",
-		LongClickable: n.LongClickable == "true",
-		Scrollable:    n.Scrollable == "true",
-		Selected:      n.Selected == "true",
-		Enabled:       n.Enabled == "true" || n.Enabled == "",
-		VisibleToUser: n.VisibleToUser == "true" || n.VisibleToUser == "",
-		Bounds:        b,
-	}
-	for _, c := range n.Children {
-		e.Children = append(e.Children, convertXMLNode(c))
-	}
-	return e
 }
 
 var boundsRE = regexp.MustCompile(`\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]`)

@@ -1,9 +1,11 @@
 package ui
 
 import (
+	"bytes"
 	"image"
 	"image/color"
 	"image/png"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"testing"
@@ -65,6 +67,71 @@ func TestDiff_Different(t *testing.T) {
 	if _, err := os.Stat(d); err != nil {
 		t.Errorf("diff image missing: %v", err)
 	}
+}
+
+// TestDiffFastPath_MatchesGeneric guards against the NRGBA/RGBA fast paths
+// (diffNRGBA/diffRGBA) drifting from the generic image.Image-interface path
+// (diffGeneric) — in particular the NRGBA premultiplication math, which is
+// the one place the fast path has to replicate a nontrivial stdlib formula
+// rather than just compare raw bytes.
+func TestDiffFastPath_MatchesGeneric(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
+	bounds := image.Rect(0, 0, 20, 20)
+
+	t.Run("NRGBA", func(t *testing.T) {
+		a := randomNRGBA(rng, bounds)
+		b := randomNRGBA(rng, bounds)
+		assertFastPathMatchesGeneric(t, a, b, bounds)
+	})
+
+	t.Run("RGBA", func(t *testing.T) {
+		a := randomRGBA(rng, bounds)
+		b := randomRGBA(rng, bounds)
+		assertFastPathMatchesGeneric(t, a, b, bounds)
+	})
+}
+
+func assertFastPathMatchesGeneric(t *testing.T, a, b image.Image, bounds image.Rectangle) {
+	t.Helper()
+	for _, tolerance := range []int{0, 10, 50} {
+		fastDiffImg := image.NewRGBA(bounds)
+		genericDiffImg := image.NewRGBA(bounds)
+		fastCount := diffPixels(a, b, bounds, tolerance, fastDiffImg)
+		genericCount := diffGeneric(a, b, bounds, tolerance, genericDiffImg)
+		if fastCount != genericCount {
+			t.Errorf("tolerance=%d: fast path mismatch count = %d, generic = %d", tolerance, fastCount, genericCount)
+		}
+		if !bytes.Equal(fastDiffImg.Pix, genericDiffImg.Pix) {
+			t.Errorf("tolerance=%d: fast path diff image bytes differ from generic path", tolerance)
+		}
+	}
+}
+
+func randomNRGBA(rng *rand.Rand, r image.Rectangle) *image.NRGBA {
+	img := image.NewNRGBA(r)
+	for i := range img.Pix {
+		img.Pix[i] = uint8(rng.Intn(256))
+	}
+	return img
+}
+
+func randomRGBA(rng *rand.Rand, r image.Rectangle) *image.RGBA {
+	img := image.NewRGBA(r)
+	for y := r.Min.Y; y < r.Max.Y; y++ {
+		for x := r.Min.X; x < r.Max.X; x++ {
+			a := uint8(rng.Intn(256))
+			// RGBA channels must not exceed the pixel's own alpha
+			// (premultiplied invariant); otherwise this isn't a valid
+			// *image.RGBA pixel and .At().RGBA() would misbehave.
+			img.SetRGBA(x, y, color.RGBA{
+				R: uint8(rng.Intn(int(a) + 1)),
+				G: uint8(rng.Intn(int(a) + 1)),
+				B: uint8(rng.Intn(int(a) + 1)),
+				A: a,
+			})
+		}
+	}
+	return img
 }
 
 func TestDiff_DifferentSizes(t *testing.T) {

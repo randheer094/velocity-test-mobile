@@ -50,6 +50,17 @@ func (o *Orchestrator) fetchAndFind(ctx context.Context, deviceID string, m *mat
 	if err != nil {
 		return ui.Element{}, nil, fmt.Errorf("snapshotting UI: %w", err)
 	}
+	return findInRoot(root, m)
+}
+
+// findInRoot applies m against an already-fetched snapshot — no subprocess
+// call. Use this instead of fetchAndFind when a caller needs to match more
+// than one selector (or re-verify one) against the same on-screen state,
+// to avoid re-fetching the tree for state that hasn't changed.
+func findInRoot(root ui.Element, m *matcher.Matcher) (ui.Element, []ui.Element, error) {
+	if m == nil || m.IsEmpty() {
+		return ui.Element{}, nil, matcher.ErrEmptyMatcher
+	}
 	all, err := matcher.FindAll(root, m)
 	if err != nil {
 		return ui.Element{}, nil, err

@@ -32,3 +32,24 @@ func TestClamp(t *testing.T) {
 		t.Error("zero hi disables high clamp")
 	}
 }
+
+func TestBatchKeyeventUnsupported(t *testing.T) {
+	cases := []struct {
+		name           string
+		stdout, stderr string
+		want           bool
+	}{
+		{"supported, empty output", "", "", false},
+		{"supported, whitespace only", "\n", "", false},
+		{"unknown command in stdout", "Error: Unknown command: keyevent 67 67 67", "", true},
+		{"invalid error in stderr", "", "error: invalid keyevent code", true},
+		{"mixed case unknown command", "UNKNOWN COMMAND", "", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := batchKeyeventUnsupported(c.stdout, c.stderr); got != c.want {
+				t.Errorf("batchKeyeventUnsupported(%q, %q) = %v, want %v", c.stdout, c.stderr, got, c.want)
+			}
+		})
+	}
+}

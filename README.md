@@ -4,7 +4,7 @@ An **Android testing** [Model Context Protocol](https://modelcontextprotocol.io)
 
 The server exposes **Espresso** ViewMatchers/ViewActions/ViewAssertions and **Jetpack Compose** test verbs (`onNodeWithText`, `assertIsDisplayed`, `performClick`, `waitUntilExists`, …) as **129 MCP tools** an LLM agent can call directly. Each tool takes a shared **matcher** object — the same vocabulary across find / assert / act / wait — so an agent's prompt of *"verify Login is visible; click Continue; wait for Welcome"* maps to three self-contained tool calls with no element handles to thread.
 
-Internally the server walks the device's accessibility tree (UIAutomator XML or Google's [`android` agent CLI](https://developer.android.com/tools/agents/android-cli) JSON), applies the matcher, and dispatches `adb shell input` actions. **No in-process instrumentation** — no companion APK, no Espresso runtime on the device.
+Internally the server walks the device's accessibility tree (via Google's [`android` agent CLI](https://developer.android.com/tools/agents/android-cli) JSON), applies the matcher, and dispatches `adb shell input` actions. **No in-process instrumentation** — no companion APK, no Espresso runtime on the device.
 
 - **Single static Go binary**, ~7 MB, sub-10 ms cold start.
 - **No telemetry**, no phone-home — fully local.
@@ -25,9 +25,9 @@ Internally the server walks the device's accessibility tree (UIAutomator XML or 
 | Tool | Required? | Used for |
 | --- | --- | --- |
 | `adb` | **always** | every interaction with the device |
-| `android` ([agent CLI](https://developer.android.com/tools/agents/android-cli)) | recommended | `screen_resolve` (LLM-friendly visual lookup); preferred path for `screen_layout` and `screen_capture` |
+| `android` ([agent CLI](https://developer.android.com/tools/agents/android-cli)) | **required for the testing surface** | `screen_layout`, `screen_resolve`, `find_*`, and every click/type/assert/wait verb; also the preferred (but not required) path for `screen_capture` |
 
-If `android` is missing the server logs one warning and the affected tools fall back to UIAutomator + `adb screencap`.
+If `android` is missing the server logs one warning at startup; `screen_layout`/`find_*`/the testing verbs will fail until it's installed. `screen_capture` still falls back to plain `adb screencap`.
 
 ## Install
 

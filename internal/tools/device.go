@@ -15,7 +15,7 @@ func RegisterDevice(s *mcp.Server, d *Deps) {
 		Description: "List Android devices visible to adb (physical and emulator), including their state.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
-		devs, err := d.Resolver.List(ctx)
+		devs, err := d.Resolver.ForceList(ctx)
 		if err != nil {
 			return errResult(err)
 		}

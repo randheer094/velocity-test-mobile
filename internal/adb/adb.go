@@ -70,7 +70,7 @@ func (c *Client) ShellArgv(ctx context.Context, deviceID string, argv ...string)
 }
 
 // ExecOut runs `adb exec-out <argv...>` returning raw bytes (binary mode).
-// Used for `screencap -p`, `uiautomator dump /dev/tty`.
+// Used for `screencap -p`.
 func (c *Client) ExecOut(ctx context.Context, deviceID string, argv ...string) ([]byte, error) {
 	if c.bin == "" {
 		return nil, ErrAdbMissing

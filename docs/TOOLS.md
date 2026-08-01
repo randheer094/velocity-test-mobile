@@ -198,7 +198,7 @@ All action tools return an `ActionResult`. They re-snapshot the tree, locate the
 | `double_click` | — | Espresso `doubleClick()` |
 | `long_click` | `durationMs?: int` (default 800) | Espresso `longClick()` |
 | `type_text` | `text: string`, `submit?: bool` | Espresso `typeText()` / Compose `performTextInput()` (clicks first to focus) |
-| `replace_text` | `text: string`, `submit?: bool` | Espresso `replaceText()` / Compose `performTextReplacement()` (clears via CTRL+A + DEL on Android 12+, MOVE_END + DEL spam otherwise) |
+| `replace_text` | `text: string`, `submit?: bool` | Espresso `replaceText()` / Compose `performTextReplacement()` (clears via CTRL+A + DEL on Android 12+, MOVE_END + batched DEL keyevents otherwise) |
 | `clear_text` | — | Espresso `clearText()` / Compose `performTextClearance()` |
 | `submit_text` | — | Espresso `pressImeActionButton()` (focuses the matched field then presses ENTER) |
 | `swipe_node` | `direction: "up"|"down"|"left"|"right"`, `durationMs?: int` | Espresso `swipeUp/Down/Left/Right` scoped to the matched view |

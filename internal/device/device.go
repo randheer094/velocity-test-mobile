@@ -8,11 +8,19 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/randheer094/velocity-test-mobile/internal/adb"
 	"github.com/randheer094/velocity-test-mobile/internal/androidcli"
 )
+
+// DefaultCacheTTL bounds how long a List() result is reused before a fresh
+// `adb devices -l` call is made. Device topology rarely changes mid test-run,
+// so this trades a small amount of staleness for eliminating a subprocess
+// spawn on every tool call (List is invoked by resolveDevice for nearly every
+// tool handler).
+const DefaultCacheTTL = 2 * time.Second
 
 // Device is a minimal view of a connected Android device.
 type Device struct {
@@ -29,20 +37,80 @@ type Resolver struct {
 	Adb         *adb.Client
 	AndroidCLI  *androidcli.Client
 	listTimeout time.Duration
+	cacheTTL    time.Duration
+
+	cacheMu  sync.Mutex
+	cachedAt time.Time
+	cached   []Device
+
+	now   func() time.Time                            // test seam; nil means time.Now
+	fetch func(ctx context.Context) ([]Device, error) // test seam; nil means real adb call
 }
 
-// NewResolver constructs a Resolver. Pass 0 for default timeout (5s).
-func NewResolver(a *adb.Client, c *androidcli.Client, listTimeout time.Duration) *Resolver {
+// NewResolver constructs a Resolver. Pass 0 for default timeout (5s) or
+// default cache TTL (2s).
+func NewResolver(a *adb.Client, c *androidcli.Client, listTimeout, cacheTTL time.Duration) *Resolver {
 	if listTimeout == 0 {
 		listTimeout = 5 * time.Second
 	}
-	return &Resolver{Adb: a, AndroidCLI: c, listTimeout: listTimeout}
+	if cacheTTL == 0 {
+		cacheTTL = DefaultCacheTTL
+	}
+	return &Resolver{Adb: a, AndroidCLI: c, listTimeout: listTimeout, cacheTTL: cacheTTL}
 }
 
 // List enumerates devices visible to adb. The android CLI's `emulator list`
 // only catalogs known AVDs (running or not), which is informational; live
 // devices come from `adb devices -l`.
+//
+// Results are cached for cacheTTL to avoid spawning `adb devices -l` on every
+// tool call — device topology rarely changes mid test-run. Use ForceList to
+// bypass the cache.
 func (r *Resolver) List(ctx context.Context) ([]Device, error) {
+	r.cacheMu.Lock()
+	if r.cached != nil && r.nowFunc().Sub(r.cachedAt) < r.cacheTTL {
+		cached := append([]Device(nil), r.cached...)
+		r.cacheMu.Unlock()
+		return cached, nil
+	}
+	r.cacheMu.Unlock()
+
+	devices, err := r.fetchFresh(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	r.cacheMu.Lock()
+	r.cached, r.cachedAt = devices, r.nowFunc()
+	r.cacheMu.Unlock()
+	return devices, nil
+}
+
+// ForceList bypasses and refreshes the cache. Used by the explicit
+// `device_list` tool, which is a discovery/diagnostic call where staleness
+// would be surprising.
+func (r *Resolver) ForceList(ctx context.Context) ([]Device, error) {
+	r.invalidateCache()
+	return r.List(ctx)
+}
+
+func (r *Resolver) invalidateCache() {
+	r.cacheMu.Lock()
+	r.cached = nil
+	r.cacheMu.Unlock()
+}
+
+func (r *Resolver) nowFunc() time.Time {
+	if r.now != nil {
+		return r.now()
+	}
+	return time.Now()
+}
+
+func (r *Resolver) fetchFresh(ctx context.Context) ([]Device, error) {
+	if r.fetch != nil {
+		return r.fetch(ctx)
+	}
 	cctx, cancel := context.WithTimeout(ctx, r.listTimeout)
 	defer cancel()
 
@@ -50,8 +118,7 @@ func (r *Resolver) List(ctx context.Context) ([]Device, error) {
 	if err != nil {
 		return nil, err
 	}
-	devices := parseAdbDevices(string(res.Stdout))
-	return devices, nil
+	return parseAdbDevices(string(res.Stdout)), nil
 }
 
 func parseAdbDevices(out string) []Device {
@@ -103,13 +170,23 @@ func (r *Resolver) Resolve(ctx context.Context, id string) (Device, error) {
 		return Device{}, err
 	}
 	if id != "" {
-		for _, d := range devices {
-			if d.Serial == id {
-				if d.State != "device" {
-					return Device{}, fmt.Errorf("device %s is in state %q (expected \"device\")", id, d.State)
-				}
-				return d, nil
+		if d, ok := findDevice(devices, id); ok {
+			if d.State != "device" {
+				return Device{}, fmt.Errorf("device %s is in state %q (expected \"device\")", id, d.State)
 			}
+			return d, nil
+		}
+		// The cached list might be stale (e.g. a device was just plugged
+		// in) — refresh once and retry before giving up.
+		devices, err = r.ForceList(ctx)
+		if err != nil {
+			return Device{}, err
+		}
+		if d, ok := findDevice(devices, id); ok {
+			if d.State != "device" {
+				return Device{}, fmt.Errorf("device %s is in state %q (expected \"device\")", id, d.State)
+			}
+			return d, nil
 		}
 		return Device{}, fmt.Errorf("device %q not found among %s", id, summarize(devices))
 	}
@@ -130,6 +207,15 @@ func (r *Resolver) Resolve(ctx context.Context, id string) (Device, error) {
 	default:
 		return Device{}, fmt.Errorf("multiple devices connected — pass `device`: %s", summarize(ready))
 	}
+}
+
+func findDevice(devices []Device, id string) (Device, bool) {
+	for _, d := range devices {
+		if d.Serial == id {
+			return d, true
+		}
+	}
+	return Device{}, false
 }
 
 func summarize(ds []Device) string {

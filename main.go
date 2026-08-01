@@ -6,8 +6,9 @@
 //
 // Runtime requirements (must be on PATH):
 //   - adb (always)
-//   - android (Google's agent CLI; recommended — improves screen_resolve
-//     and screen_layout when present, gracefully falls back to adb otherwise)
+//   - android (Google's agent CLI; required for screen_layout, screen_resolve,
+//     find_*, and every testing verb — screen_capture falls back to plain adb
+//     if it's absent, but the rest of the testing surface will not work)
 package main
 
 import (
@@ -64,15 +65,15 @@ func main() {
 		// will return ErrAdbMissing until adb is installed.
 		log.Printf("warning: %v — server will start but tool calls will fail until adb is installed", err)
 	}
-	cli := androidcli.New(r) // optional
+	cli := androidcli.New(r)
 	if !cli.Available() {
-		log.Printf("`android` agent CLI not found — `screen_resolve` will be unavailable and `screen_layout`/`find_*` will use UIAutomator instead. Install: https://developer.android.com/tools/agents/android-cli")
+		log.Printf("warning: `android` agent CLI not found — screen_layout, screen_resolve, find_*, and the rest of the testing surface (click/type/assert/wait verbs) will fail until it is installed. Install: https://developer.android.com/tools/agents/android-cli")
 	}
 
 	deps := &tools.Deps{
 		Adb:           adbClient,
 		AndroidCLI:    cli,
-		Resolver:      device.NewResolver(adbClient, cli, 5*time.Second),
+		Resolver:      device.NewResolver(adbClient, cli, 5*time.Second, device.DefaultCacheTTL),
 		Apps:          apps.New(adbClient, cli),
 		Layout:        ui.NewLayoutClient(adbClient, cli),
 		Screenshot:    ui.NewScreenshotClient(adbClient, cli),

@@ -38,9 +38,9 @@
                                     │
                                     ▼
         ┌──────────────────────────────────────────────────────────────────┐
-        │ adb (always)         android (recommended)                       │
+        │ adb (always)         android (required for layout/matcher tools) │
         │  ↓                    ↓                                          │
-        │ Android device / emulator (UIAutomator + input + logcat)         │
+        │ Android device / emulator (accessibility tree + input + logcat) │
         └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -51,7 +51,7 @@ A typical call — `assert_clickable_and_click({match:{text:"Submit"}})` — flo
 1. **MCP transport** — JSON-RPC arrives on stdin. The SDK dispatches to the registered handler.
 2. **Schema validation** — the JSON Schema for the tool (built in `tools/testing_schema.go`) validates `device`, `match`, and any extras. Recursion in `match` is expressed via `$defs/matcher` + `$ref`.
 3. **Device resolution** — `Resolver.Resolve(ctx, args.Device)` returns the target serial (auto-picked when only one device is connected).
-4. **Tree snapshot** — `LayoutClient.Tree(ctx, dev)` runs `android layout --pretty` if the agent CLI is available, else `adb exec-out uiautomator dump /dev/tty`, parses, and returns the recursive `ui.Element`.
+4. **Tree snapshot** — `LayoutClient.Tree(ctx, dev)` runs `android layout --pretty` (the agent CLI is required; returns `androidcli.ErrNotInstalled` otherwise), parses, and returns the recursive `ui.Element`.
 5. **Matcher evaluation** — `matcher.FindAll(root, m)` flattens the tree once, then evaluates every node by index against the matcher's local predicates plus tree-aware combinators (`HasAncestor`, `HasDescendant`, `HasParent`, `HasSibling`, `IsRoot`, `ParentIndex`, `CompletelyDisplayed`, `DisplayingAtLeastPercent`).
 6. **Action dispatch** — once the target node is identified, the orchestrator computes the centre point and calls into `internal/input` which spawns `adb shell input tap …`.
 7. **Result serialization** — the orchestrator returns a structured result (`AssertResult`, `ActionResult`, `WaitResult`). The handler renders it as `mcp.TextContent` with pretty-printed JSON.
@@ -79,7 +79,7 @@ Tests at every layer:
 - `diagnostics` — meminfo / gfxinfo / battery parsers.
 - `matcher` — every matcher field, tree-position predicates, duplicate-sibling correctness, instance disambiguation.
 - `testing` — intent log scraping, idle-tree hashing.
-- `ui` — screenshot diff, UIAutomator XML parsing, `android layout` JSON parsing, bounds parsing.
+- `ui` — screenshot diff, `android layout` JSON parsing, bounds parsing.
 - `system` — wm size / density parsing.
 
 ## The matcher as a contract
@@ -125,7 +125,7 @@ This is approximate — implicit intents that don't surface in `ActivityManager`
 | Condition | Behaviour |
 | --- | --- |
 | `adb` not on `PATH` | server logs and exits non-zero at startup. |
-| `android` not on `PATH` | server logs once; tools that depend on it return an actionable error pointing at the install page; matcher tools fall back to UIAutomator. |
+| `android` not on `PATH` | server logs once; `screen_layout`, `screen_resolve`, `find_*`, and every testing verb return an actionable error pointing at the install page. `screen_capture` still works via plain adb. |
 | No devices connected | every device-targeted tool returns `no devices connected; run \`adb devices\` to verify`. |
 | Multiple devices, no `device` arg | tool returns the candidate list and asks for an explicit serial. |
 | Empty matcher | tool returns `matcher is empty: supply at least one of …`. |
