@@ -27,7 +27,7 @@ func Catalog() []string {
 		"device_set_orientation", "device_get_props",
 
 		// app lifecycle / state / verification
-		"app_list", "app_launch", "app_terminate", "app_clear_data", "app_get_info",
+		"app_list", "app_install", "app_launch", "app_terminate", "app_clear_data", "app_get_info",
 		"permission_grant", "permission_revoke",
 		"appops_set", "appops_get",
 		"intent_send",

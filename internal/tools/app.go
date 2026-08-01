@@ -10,11 +10,13 @@ import (
 )
 
 // RegisterApp exposes test setup/teardown and verification verbs over apps:
-// launch / terminate / clear-data, permission grant/revoke, intent dispatch
-// (deep-link tests), package metadata inspection, and run-as data inspection.
+// install, launch / terminate / clear-data, permission grant/revoke, intent
+// dispatch (deep-link tests), package metadata inspection, and run-as data
+// inspection.
 //
-// APK install / uninstall is intentionally absent — those are deployment
-// concerns, not test code.
+// APK uninstall is intentionally absent — that's a deployment concern, not
+// test code. Install is present because a runbook's first step is often
+// "install the build under test if it isn't already on the device".
 func RegisterApp(s *mcp.Server, d *Deps) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "app_list",
@@ -33,6 +35,37 @@ func RegisterApp(s *mcp.Server, d *Deps) {
 			list = []apps.App{}
 		}
 		return jsonResult(map[string]any{"items": list})
+	})
+
+	type installArgs struct {
+		DeviceArg
+		ApkPath string `json:"apkPath" jsonschema:"host filesystem path to the .apk to install"`
+		Package string `json:"package,omitempty" jsonschema:"if set, skip the install when this package is already present on the device (idempotent test setup); omit to always (re)install with -r"`
+	}
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "app_install",
+		Description: "Install an APK from a host path (test setup). Prefers `android run --apks=` when the agent CLI is available, falling back to `adb install -r`. Pass `package` to make the call idempotent — the install is skipped when that package is already present.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, args installArgs) (*mcp.CallToolResult, any, error) {
+		dev, err := d.resolveDevice(ctx, args.Device)
+		if err != nil {
+			return errResult(err)
+		}
+		if args.Package != "" {
+			list, err := d.Apps.List(ctx, dev)
+			if err != nil {
+				return errResult(err)
+			}
+			for _, a := range list {
+				if a.Package == args.Package {
+					return textResult(args.Package + " already installed, skipping")
+				}
+			}
+		}
+		out, err := d.Apps.Install(ctx, dev, args.ApkPath)
+		if err != nil {
+			return errResult(err)
+		}
+		return textResult(out)
 	})
 
 	type launchArgs struct {

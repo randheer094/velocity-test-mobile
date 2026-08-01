@@ -63,6 +63,19 @@ func parseLauncherActivities(out string) []App {
 	return apps
 }
 
+// ambiguousActivityMarker is what `android run` prints (while still exiting
+// 0) when it can't pick a single activity to launch post-install — common on
+// APKs with many exported/launcher-eligible activities. `app_install` only
+// promises an install, so this case must fall through to plain `adb install
+// -r` rather than surface the CLI's disambiguation prompt as "success".
+const ambiguousActivityMarker = "Multiple candidates found for type ACTIVITY"
+
+// isAmbiguousActivityOutput reports whether `android run`'s stdout is the
+// disambiguation prompt described above rather than a genuine install result.
+func isAmbiguousActivityOutput(out string) bool {
+	return strings.Contains(out, ambiguousActivityMarker)
+}
+
 // Install pushes an APK and installs it. When the android CLI is available
 // and apkPath is on the host, prefers `android run --apks=...` (no rebuild).
 func (c *Client) Install(ctx context.Context, deviceID, apkPath string) (string, error) {
@@ -72,7 +85,13 @@ func (c *Client) Install(ctx context.Context, deviceID, apkPath string) (string,
 			args = append(args, "--device="+deviceID)
 		}
 		if res, err := c.AndroidCLI.Run(ctx, args...); err == nil {
-			return strings.TrimSpace(string(res.Stdout)), nil
+			out := strings.TrimSpace(string(res.Stdout))
+			if !isAmbiguousActivityOutput(out) {
+				return out, nil
+			}
+			// Fall through to plain adb: post-install launch couldn't
+			// resolve an activity, so re-run through a path that never
+			// attempts to launch.
 		}
 		// Fall through to plain adb on android-CLI failure.
 	}
