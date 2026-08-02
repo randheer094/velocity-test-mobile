@@ -121,6 +121,79 @@ func (c *Client) Fling(ctx context.Context, deviceID string, dir Direction, scre
 	return c.Swipe(ctx, deviceID, dir, screenW, screenH, anchorX, anchorY, distance, 80)
 }
 
+// TapAndPressButton taps at (x,y), optionally waits settleMs for focus to
+// land, then presses the named button — as a single adb shell invocation
+// instead of a tap subprocess, a client-side sleep, and a second keyevent
+// subprocess. Pass settleMs <= 0 to skip the wait.
+func (c *Client) TapAndPressButton(ctx context.Context, deviceID string, x, y, settleMs int, name string) error {
+	if x < 0 || y < 0 {
+		return fmt.Errorf("coordinates must be non-negative")
+	}
+	code, err := adb.Keycode(name)
+	if err != nil {
+		return err
+	}
+	_, err = c.Adb.Shell(ctx, deviceID, buildTapAndPressButtonCmd(x, y, settleMs, code))
+	return err
+}
+
+func buildTapAndPressButtonCmd(x, y, settleMs, code int) string {
+	cmd := fmt.Sprintf("input tap %d %d", x, y)
+	if settleMs > 0 {
+		cmd += "; sleep " + settleSeconds(settleMs)
+	}
+	cmd += fmt.Sprintf("; input keyevent %d", code)
+	return cmd
+}
+
+// TapAndType taps at (x,y), waits settleMs for focus to land, then types
+// text (and optionally submits) — all in a single adb shell invocation when
+// text is plain ASCII, which is the common case. Non-ASCII text can't be
+// safely folded into one call (it goes through TypeKeys' multi-step
+// clipboard dance), so that path only fuses the tap+settle step.
+func (c *Client) TapAndType(ctx context.Context, deviceID string, x, y, settleMs int, text string, submit bool) error {
+	if x < 0 || y < 0 {
+		return fmt.Errorf("coordinates must be non-negative")
+	}
+	if !isASCII(text) {
+		if _, err := c.Adb.Shell(ctx, deviceID, buildTapAndSettleCmd(x, y, settleMs)); err != nil {
+			return err
+		}
+		return c.TypeKeys(ctx, deviceID, text, submit)
+	}
+	_, err := c.Adb.Shell(ctx, deviceID, buildTapAndTypeASCIICmd(x, y, settleMs, text, submit))
+	return err
+}
+
+func buildTapAndSettleCmd(x, y, settleMs int) string {
+	cmd := fmt.Sprintf("input tap %d %d", x, y)
+	if settleMs > 0 {
+		cmd += "; sleep " + settleSeconds(settleMs)
+	}
+	return cmd
+}
+
+func buildTapAndTypeASCIICmd(x, y, settleMs int, text string, submit bool) string {
+	parts := []string{fmt.Sprintf("input tap %d %d", x, y)}
+	if settleMs > 0 {
+		parts = append(parts, "sleep "+settleSeconds(settleMs))
+	}
+	if text != "" {
+		converted := strings.ReplaceAll(text, " ", "%s")
+		parts = append(parts, "input text "+adb.QuoteForShell(converted))
+	}
+	if submit {
+		parts = append(parts, "input keyevent 66")
+	}
+	return strings.Join(parts, "; ")
+}
+
+// settleSeconds formats a millisecond duration as a `sleep`-compatible
+// fractional-second string (e.g. 150 -> "0.150").
+func settleSeconds(ms int) string {
+	return fmt.Sprintf("%.3f", float64(ms)/1000.0)
+}
+
 // PressButton sends a keyevent for the named button.
 func (c *Client) PressButton(ctx context.Context, deviceID, name string) error {
 	code, err := adb.Keycode(name)

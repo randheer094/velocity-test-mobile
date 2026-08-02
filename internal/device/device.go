@@ -22,6 +22,11 @@ import (
 // tool handler).
 const DefaultCacheTTL = 2 * time.Second
 
+// DefaultPropsCacheTTL bounds how long a GetProps() result is reused per
+// device. Build properties don't change without a reboot, so this can be
+// much longer-lived than the device list cache.
+const DefaultPropsCacheTTL = 30 * time.Second
+
 // Device is a minimal view of a connected Android device.
 type Device struct {
 	Serial    string `json:"serial"`
@@ -43,20 +48,33 @@ type Resolver struct {
 	cachedAt time.Time
 	cached   []Device
 
-	now   func() time.Time                            // test seam; nil means time.Now
-	fetch func(ctx context.Context) ([]Device, error) // test seam; nil means real adb call
+	propsCacheTTL time.Duration
+	propsMu       sync.Mutex
+	propsCache    map[string]cachedProps
+
+	now        func() time.Time                                          // test seam; nil means time.Now
+	fetch      func(ctx context.Context) ([]Device, error)               // test seam; nil means real adb call
+	fetchProps func(ctx context.Context, deviceID string) (Props, error) // test seam; nil means real adb call
 }
 
-// NewResolver constructs a Resolver. Pass 0 for default timeout (5s) or
-// default cache TTL (2s).
-func NewResolver(a *adb.Client, c *androidcli.Client, listTimeout, cacheTTL time.Duration) *Resolver {
+type cachedProps struct {
+	props Props
+	at    time.Time
+}
+
+// NewResolver constructs a Resolver. Pass 0 for default timeout (5s),
+// default device-list cache TTL (2s), or default props cache TTL (30s).
+func NewResolver(a *adb.Client, c *androidcli.Client, listTimeout, cacheTTL, propsCacheTTL time.Duration) *Resolver {
 	if listTimeout == 0 {
 		listTimeout = 5 * time.Second
 	}
 	if cacheTTL == 0 {
 		cacheTTL = DefaultCacheTTL
 	}
-	return &Resolver{Adb: a, AndroidCLI: c, listTimeout: listTimeout, cacheTTL: cacheTTL}
+	if propsCacheTTL == 0 {
+		propsCacheTTL = DefaultPropsCacheTTL
+	}
+	return &Resolver{Adb: a, AndroidCLI: c, listTimeout: listTimeout, cacheTTL: cacheTTL, propsCacheTTL: propsCacheTTL}
 }
 
 // List enumerates devices visible to adb. The android CLI's `emulator list`
@@ -243,7 +261,36 @@ type Props struct {
 }
 
 // GetProps fetches a curated set of read-only system properties.
+//
+// Results are cached per device for propsCacheTTL — build properties don't
+// change without a reboot, so this avoids a `getprop` subprocess spawn on
+// every device_get_props call within the TTL window.
 func (r *Resolver) GetProps(ctx context.Context, deviceID string) (Props, error) {
+	r.propsMu.Lock()
+	if cached, ok := r.propsCache[deviceID]; ok && r.nowFunc().Sub(cached.at) < r.propsCacheTTL {
+		r.propsMu.Unlock()
+		return cached.props, nil
+	}
+	r.propsMu.Unlock()
+
+	props, err := r.fetchProperties(ctx, deviceID)
+	if err != nil {
+		return Props{}, err
+	}
+
+	r.propsMu.Lock()
+	if r.propsCache == nil {
+		r.propsCache = make(map[string]cachedProps)
+	}
+	r.propsCache[deviceID] = cachedProps{props: props, at: r.nowFunc()}
+	r.propsMu.Unlock()
+	return props, nil
+}
+
+func (r *Resolver) fetchProperties(ctx context.Context, deviceID string) (Props, error) {
+	if r.fetchProps != nil {
+		return r.fetchProps(ctx, deviceID)
+	}
 	res, err := r.Adb.Shell(ctx, deviceID, "getprop")
 	if err != nil {
 		return Props{}, err

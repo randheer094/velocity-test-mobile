@@ -20,10 +20,10 @@ func FindAll(root ui.Element, m *Matcher) ([]ui.Element, error) {
 	if m == nil || m.IsEmpty() {
 		return nil, ErrEmptyMatcher
 	}
-	flat := flattenWithParents(root)
+	flat, childrenOf := flattenWithParents(root)
 	var matches []ui.Element
 	for i := range flat {
-		ok, err := matchAtIndex(i, flat, m)
+		ok, err := matchAtIndex(i, flat, childrenOf, m)
 		if err != nil {
 			return nil, err
 		}
@@ -61,24 +61,41 @@ func Count(root ui.Element, m *Matcher) (int, error) {
 
 // pathItem holds a node together with its position in the flattened tree.
 // `parent` is the flat index of the immediate parent, -1 for the root.
+// `siblingIndex` and `subtreeEnd` are precomputed once per FindAll call so
+// the tree-position combinators below (ParentIndex, HasDescendant,
+// HasSibling) don't need to rescan the whole flattened tree per candidate.
 type pathItem struct {
-	elem   ui.Element
-	parent int
-	depth  int
+	elem         ui.Element
+	parent       int
+	depth        int
+	siblingIndex int // position among the parent's direct children (0-based)
+	subtreeEnd   int // largest flat index within this node's own subtree (inclusive)
 }
 
-func flattenWithParents(root ui.Element) []pathItem {
-	out := []pathItem{}
-	var walk func(e ui.Element, parent int, depth int)
-	walk = func(e ui.Element, parent int, depth int) {
-		idx := len(out)
-		out = append(out, pathItem{elem: e, parent: parent, depth: depth})
-		for _, c := range e.Children {
-			walk(c, idx, depth+1)
+// flattenWithParents does a pre-order DFS flatten. Pre-order means every
+// node's descendants occupy a contiguous index range immediately after it
+// ([idx+1, subtreeEnd]), which is what lets HasDescendant below iterate just
+// the candidate's subtree instead of the entire tree.
+//
+// childrenOf[i] lists the flat indices of node i's direct children, in
+// order — used by HasSibling to iterate just the candidate's siblings.
+func flattenWithParents(root ui.Element) (flat []pathItem, childrenOf [][]int) {
+	var walk func(e ui.Element, parent, depth, siblingIndex int) int
+	walk = func(e ui.Element, parent, depth, siblingIndex int) int {
+		idx := len(flat)
+		flat = append(flat, pathItem{elem: e, parent: parent, depth: depth, siblingIndex: siblingIndex})
+		childrenOf = append(childrenOf, nil)
+		end := idx
+		for i, c := range e.Children {
+			childIdx := len(flat)
+			childrenOf[idx] = append(childrenOf[idx], childIdx)
+			end = walk(c, idx, depth+1, i)
 		}
+		flat[idx].subtreeEnd = end
+		return end
 	}
-	walk(root, -1, 0)
-	return out
+	walk(root, -1, 0, 0)
+	return flat, childrenOf
 }
 
 // matchAtIndex evaluates m against the node at flat[idx]. It is the
@@ -89,7 +106,7 @@ func flattenWithParents(root ui.Element) []pathItem {
 // Carrying the index (rather than re-deriving it from the element's content)
 // makes correctness independent of duplicate sibling content — two nodes
 // with identical text/bounds/class are still distinct paths.
-func matchAtIndex(idx int, flat []pathItem, m *Matcher) (bool, error) {
+func matchAtIndex(idx int, flat []pathItem, childrenOf [][]int, m *Matcher) (bool, error) {
 	item := flat[idx]
 
 	// Local predicates first.
@@ -109,20 +126,7 @@ func matchAtIndex(idx int, flat []pathItem, m *Matcher) (bool, error) {
 		if item.parent < 0 {
 			return false, nil
 		}
-		// Position among the parent's direct children.
-		pos := -1
-		count := 0
-		for i, other := range flat {
-			if other.parent != item.parent {
-				continue
-			}
-			if i == idx {
-				pos = count
-				break
-			}
-			count++
-		}
-		if pos != *m.ParentIndex {
+		if item.siblingIndex != *m.ParentIndex {
 			return false, nil
 		}
 	}
@@ -161,7 +165,7 @@ func matchAtIndex(idx int, flat []pathItem, m *Matcher) (bool, error) {
 		if item.parent < 0 {
 			return false, nil
 		}
-		ok, err := matchAtIndex(item.parent, flat, m.HasParent)
+		ok, err := matchAtIndex(item.parent, flat, childrenOf, m.HasParent)
 		if err != nil || !ok {
 			return ok, err
 		}
@@ -170,7 +174,7 @@ func matchAtIndex(idx int, flat []pathItem, m *Matcher) (bool, error) {
 	if m.HasAncestor != nil {
 		matched := false
 		for p := item.parent; p >= 0; p = flat[p].parent {
-			ok, err := matchAtIndex(p, flat, m.HasAncestor)
+			ok, err := matchAtIndex(p, flat, childrenOf, m.HasAncestor)
 			if err != nil {
 				return false, err
 			}
@@ -186,11 +190,10 @@ func matchAtIndex(idx int, flat []pathItem, m *Matcher) (bool, error) {
 
 	if m.HasDescendant != nil {
 		matched := false
-		for i := range flat {
-			if i == idx || !isDescendantOf(flat, i, idx) {
-				continue
-			}
-			ok, err := matchAtIndex(i, flat, m.HasDescendant)
+		// Pre-order DFS means idx's descendants occupy the contiguous range
+		// (idx, subtreeEnd] — no need to rescan the whole tree.
+		for i := idx + 1; i <= item.subtreeEnd; i++ {
+			ok, err := matchAtIndex(i, flat, childrenOf, m.HasDescendant)
 			if err != nil {
 				return false, err
 			}
@@ -209,11 +212,11 @@ func matchAtIndex(idx int, flat []pathItem, m *Matcher) (bool, error) {
 			return false, nil
 		}
 		matched := false
-		for i, other := range flat {
-			if i == idx || other.parent != item.parent {
+		for _, i := range childrenOf[item.parent] {
+			if i == idx {
 				continue
 			}
-			ok, err := matchAtIndex(i, flat, m.HasSibling)
+			ok, err := matchAtIndex(i, flat, childrenOf, m.HasSibling)
 			if err != nil {
 				return false, err
 			}
@@ -228,15 +231,6 @@ func matchAtIndex(idx int, flat []pathItem, m *Matcher) (bool, error) {
 	}
 
 	return true, nil
-}
-
-func isDescendantOf(flat []pathItem, i, ancestor int) bool {
-	for p := flat[i].parent; p >= 0; p = flat[p].parent {
-		if p == ancestor {
-			return true
-		}
-	}
-	return false
 }
 
 // area returns the rectangular area of bounds.

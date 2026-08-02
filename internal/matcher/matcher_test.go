@@ -311,3 +311,120 @@ func TestInstance(t *testing.T) {
 		t.Fatal("expected out-of-range error")
 	}
 }
+
+// asymmetricTree builds a tree where the first child of root has its own
+// deep subtree (pushing many nodes between it and its later siblings in the
+// pre-order flattening), and a decoy node with matching content sits
+// entirely outside ContainerA's subtree. This is the shape that would catch
+// an off-by-one in a subtree-range (HasDescendant) or adjacency-list
+// (HasSibling/ParentIndex) implementation: naive "rescan everything" code
+// can't get this wrong, but an index-range or adjacency-list optimization
+// can if the range/list is computed incorrectly.
+func asymmetricTree() ui.Element {
+	return ui.Element{
+		Class: "Root", Enabled: true, VisibleToUser: true,
+		Bounds: ui.Bounds{Width: 1000, Height: 1000},
+		Children: []ui.Element{
+			{Class: "ContainerA", Enabled: true, VisibleToUser: true, Bounds: ui.Bounds{Width: 500, Height: 500}, Children: []ui.Element{
+				{Class: "Item", Text: "Deep", Enabled: true, VisibleToUser: true, Bounds: ui.Bounds{Width: 10, Height: 10}, Children: []ui.Element{
+					{Class: "Item", Text: "Deeper", Enabled: true, VisibleToUser: true, Bounds: ui.Bounds{Width: 5, Height: 5}, Children: []ui.Element{
+						{Class: "Item", Text: "Deepest", Enabled: true, VisibleToUser: true, Bounds: ui.Bounds{Width: 2, Height: 2}},
+					}},
+				}},
+				{Class: "Item", Text: "SiblingOfDeep", Enabled: true, VisibleToUser: true, Bounds: ui.Bounds{Width: 10, Height: 10}},
+			}},
+			// ContainerB is a sibling of ContainerA, appearing after all of
+			// ContainerA's descendants in the pre-order flattening. Its
+			// content deliberately matches text used inside ContainerA.
+			{Class: "ContainerB", Enabled: true, VisibleToUser: true, Bounds: ui.Bounds{Width: 500, Height: 500}, Children: []ui.Element{
+				{Class: "Item", Text: "Deep", Enabled: true, VisibleToUser: true, Bounds: ui.Bounds{Width: 10, Height: 10}},
+				{Class: "Item", Text: "SiblingOfDeep", Enabled: true, VisibleToUser: true, Bounds: ui.Bounds{Width: 10, Height: 10}},
+			}},
+		},
+	}
+}
+
+func TestHasDescendant_SubtreeIsolation(t *testing.T) {
+	root := asymmetricTree()
+
+	// ContainerA has a "Deepest" descendant three levels down.
+	got, err := FindAll(root, &Matcher{ClassName: "ContainerA", HasDescendant: &Matcher{Text: "Deepest"}})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("ContainerA.HasDescendant(Deepest): got %d, want 1", len(got))
+	}
+
+	// ContainerB has no "Deepest" descendant — must not match, even though
+	// "Deepest" exists elsewhere in the tree (guards against a subtree-range
+	// that's too wide, e.g. an off-by-one including ContainerB's nodes).
+	got, err = FindAll(root, &Matcher{ClassName: "ContainerB", HasDescendant: &Matcher{Text: "Deepest"}})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("ContainerB.HasDescendant(Deepest): got %d, want 0", len(got))
+	}
+
+	// Both containers have a "Deep"-content descendant (ContainerA's is
+	// itself nested three levels deep with children of its own; ContainerB's
+	// is a direct, childless leaf) — matches by content, not position.
+	got, err = FindAll(root, &Matcher{ClassName: "Container", HasDescendant: &Matcher{Text: "Deep"}})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("Container*.HasDescendant(Deep): got %d, want 2", len(got))
+	}
+}
+
+func TestHasSibling_DoesNotMatchCousins(t *testing.T) {
+	root := asymmetricTree()
+
+	// "SiblingOfDeep" inside ContainerA has a sibling ("Deep") — but must not
+	// be considered siblings with ContainerB's identically-named nodes, which
+	// share no parent (guards against an adjacency list that's too broad).
+	got, err := FindAll(root, &Matcher{Text: "SiblingOfDeep", HasSibling: &Matcher{Text: "Deep"}})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("HasSibling(Deep): got %d, want 2 (one per container)", len(got))
+	}
+
+	// "Deepest" has no siblings at all (only child of "Deeper") — must never
+	// match HasSibling, even against a matcher ("Deep") that has plenty of
+	// hits elsewhere in the tree. Guards against an adjacency list that
+	// leaks in unrelated nodes when a parent has exactly one child.
+	got, err = FindAll(root, &Matcher{Text: "Deepest", HasSibling: &Matcher{Text: "Deep"}})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("Deepest.HasSibling(Deep): got %d, want 0", len(got))
+	}
+}
+
+func TestParentIndex_WithAsymmetricSubtrees(t *testing.T) {
+	root := asymmetricTree()
+	zero, one := 0, 1
+
+	// Within ContainerA, "Deep" (which itself has a large subtree) is
+	// child 0 and "SiblingOfDeep" is child 1 — despite many descendant
+	// nodes of "Deep" sitting between them in the pre-order flattening.
+	got, err := FindAll(root, &Matcher{ClassName: "ContainerA", HasDescendant: &Matcher{Text: "Deep", ParentIndex: &zero}})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("ContainerA.HasDescendant(Deep at index 0): got %d, want 1", len(got))
+	}
+	got, err = FindAll(root, &Matcher{ClassName: "ContainerA", HasDescendant: &Matcher{Text: "SiblingOfDeep", ParentIndex: &one}})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("ContainerA.HasDescendant(SiblingOfDeep at index 1): got %d, want 1", len(got))
+	}
+}

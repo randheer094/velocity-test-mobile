@@ -73,7 +73,7 @@ func main() {
 	deps := &tools.Deps{
 		Adb:           adbClient,
 		AndroidCLI:    cli,
-		Resolver:      device.NewResolver(adbClient, cli, 5*time.Second, device.DefaultCacheTTL),
+		Resolver:      device.NewResolver(adbClient, cli, 5*time.Second, device.DefaultCacheTTL, device.DefaultPropsCacheTTL),
 		Apps:          apps.New(adbClient, cli),
 		Layout:        ui.NewLayoutClient(adbClient, cli),
 		Screenshot:    ui.NewScreenshotClient(adbClient, cli),

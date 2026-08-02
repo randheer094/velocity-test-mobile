@@ -80,15 +80,11 @@ func (o *Orchestrator) TypeText(ctx context.Context, deviceID string, m *matcher
 func (o *Orchestrator) typeTextElem(ctx context.Context, deviceID string, elem ui.Element, text string, submit bool) (ActionResult, error) {
 	x, y := CenterOf(elem)
 	if !elem.Focused {
-		if err := o.Input.Tap(ctx, deviceID, x, y); err != nil {
+		// Tap, settle, and type in one shell round trip instead of three.
+		if err := o.Input.TapAndType(ctx, deviceID, x, y, 150, text, submit); err != nil {
 			return ActionResult{Element: &elem, X: x, Y: y, Reason: err.Error()}, err
 		}
-		// Give focus a moment to settle.
-		select {
-		case <-ctx.Done():
-			return ActionResult{}, ctx.Err()
-		case <-time.After(150 * time.Millisecond):
-		}
+		return ActionResult{OK: true, Element: &elem, X: x, Y: y}, nil
 	}
 	if err := o.Input.TypeKeys(ctx, deviceID, text, submit); err != nil {
 		return ActionResult{Element: &elem, X: x, Y: y, Reason: err.Error()}, err
@@ -173,14 +169,11 @@ func (o *Orchestrator) Submit(ctx context.Context, deviceID string, m *matcher.M
 	}
 	x, y := CenterOf(elem)
 	if !elem.Focused {
-		if err := o.Input.Tap(ctx, deviceID, x, y); err != nil {
+		// Tap, settle, and press ENTER in one shell round trip instead of two.
+		if err := o.Input.TapAndPressButton(ctx, deviceID, x, y, 120, "ENTER"); err != nil {
 			return ActionResult{Element: &elem, X: x, Y: y, Reason: err.Error()}, err
 		}
-		select {
-		case <-ctx.Done():
-			return ActionResult{}, ctx.Err()
-		case <-time.After(120 * time.Millisecond):
-		}
+		return ActionResult{OK: true, Element: &elem, X: x, Y: y}, nil
 	}
 	if err := o.Input.PressButton(ctx, deviceID, "ENTER"); err != nil {
 		return ActionResult{Element: &elem, X: x, Y: y, Reason: err.Error()}, err
@@ -422,6 +415,7 @@ func (o *Orchestrator) ScrollToIndex(ctx context.Context, deviceID string, conta
 // to a plain `input keyevent` for the key alone and surface a Reason
 // describing the missing modifier coverage.
 func (o *Orchestrator) PerformKeyPress(ctx context.Context, deviceID string, m *matcher.Matcher, key string, ctrl, shift, alt bool) (ActionResult, error) {
+	hasModifier := ctrl || shift || alt
 	if m != nil && !m.IsEmpty() {
 		elem, _, err := o.fetchAndFind(ctx, deviceID, m)
 		if err != nil {
@@ -429,6 +423,14 @@ func (o *Orchestrator) PerformKeyPress(ctx context.Context, deviceID string, m *
 		}
 		x, y := CenterOf(elem)
 		if !elem.Focused {
+			if !hasModifier {
+				// Tap, settle, and press the key in one shell round trip
+				// instead of two.
+				if err := o.Input.TapAndPressButton(ctx, deviceID, x, y, 120, key); err != nil {
+					return ActionResult{Element: &elem, X: x, Y: y, Reason: err.Error()}, err
+				}
+				return ActionResult{OK: true}, nil
+			}
 			if err := o.Input.Tap(ctx, deviceID, x, y); err != nil {
 				return ActionResult{Element: &elem, X: x, Y: y, Reason: err.Error()}, err
 			}
@@ -439,7 +441,7 @@ func (o *Orchestrator) PerformKeyPress(ctx context.Context, deviceID string, m *
 			}
 		}
 	}
-	if !(ctrl || shift || alt) {
+	if !hasModifier {
 		if err := o.Input.PressButton(ctx, deviceID, key); err != nil {
 			return ActionResult{Reason: err.Error()}, err
 		}
@@ -479,9 +481,12 @@ func (o *Orchestrator) PerformIMEAction(ctx context.Context, deviceID string, m 
 		}
 		x, y := CenterOf(elem)
 		if !elem.Focused {
-			if err := o.Input.Tap(ctx, deviceID, x, y); err != nil {
+			// Tap and press ENTER in one shell round trip instead of two.
+			// No settle delay here, matching prior behavior.
+			if err := o.Input.TapAndPressButton(ctx, deviceID, x, y, 0, "ENTER"); err != nil {
 				return ActionResult{Element: &elem, X: x, Y: y, Reason: err.Error()}, err
 			}
+			return ActionResult{OK: true}, nil
 		}
 	}
 	if err := o.Input.PressButton(ctx, deviceID, "ENTER"); err != nil {
