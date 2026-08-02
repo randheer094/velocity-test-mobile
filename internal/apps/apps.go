@@ -85,13 +85,17 @@ func (c *Client) Install(ctx context.Context, deviceID, apkPath string) (string,
 			args = append(args, "--device="+deviceID)
 		}
 		if res, err := c.AndroidCLI.Run(ctx, args...); err == nil {
-			out := strings.TrimSpace(string(res.Stdout))
-			if !isAmbiguousActivityOutput(out) {
+			if out, ok := interpretRunResult(string(res.Stdout), string(res.Stderr)); ok {
 				return out, nil
 			}
-			// Fall through to plain adb: post-install launch couldn't
-			// resolve an activity, so re-run through a path that never
-			// attempts to launch.
+			// Fall through to plain adb: `android run` either hit the
+			// "multiple candidates" disambiguation prompt, or reported a
+			// genuine failure — verified live that `android run` exits 0
+			// even when the install fails (bad/missing APK, a later
+			// deploy-stage error after an initially successful-looking
+			// "Sent ... MB" line, etc.), with the real error on stderr.
+			// Exit code alone can't be trusted here, so re-run through a
+			// path with real exit-code-based failure semantics.
 		}
 		// Fall through to plain adb on android-CLI failure.
 	}
@@ -100,6 +104,25 @@ func (c *Client) Install(ctx context.Context, deviceID, apkPath string) (string,
 		return "", err
 	}
 	return strings.TrimSpace(string(res.Stdout)), nil
+}
+
+// interpretRunResult decides whether `android run`'s captured output is a
+// genuine install success. Only trust it when stdout is non-empty and
+// stderr is empty: `android run` reports failures on stderr while still
+// exiting 0, and has been observed writing a success-looking line to
+// stdout ("Standard Install: Sent ... MB") before a later deploy stage
+// fails and writes the real error to stderr — so a non-empty stdout alone
+// is not sufficient evidence of success.
+func interpretRunResult(stdout, stderr string) (out string, ok bool) {
+	stdout = strings.TrimSpace(stdout)
+	stderr = strings.TrimSpace(stderr)
+	if isAmbiguousActivityOutput(stdout) {
+		return "", false
+	}
+	if stdout == "" || stderr != "" {
+		return "", false
+	}
+	return stdout, true
 }
 
 // Uninstall removes a package.
