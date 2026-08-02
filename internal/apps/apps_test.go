@@ -115,6 +115,44 @@ Activity started: com.example.app/.MainActivity`
 	}
 }
 
+func TestInterpretRunResult(t *testing.T) {
+	// All captured live against android CLI v1.0.15985488 / a real emulator.
+	const success = `Standard Install: Sent 11.35 MB (1 APK)
+Launching com.example.installprobe.MainActivity
+Activation completed successfully`
+
+	if out, ok := interpretRunResult(success, ""); !ok || out != success {
+		t.Errorf("clean success: got (%q, %v), want (%q, true)", out, ok, success)
+	}
+
+	// `android run` exits 0 even when the APK doesn't exist / fails to
+	// parse, reporting the real error on stderr with an empty stdout.
+	const missingApkErr = `Error: Error during check: java.io.FileNotFoundException: /tmp/nonexistent.apk (No such file or directory)
+Component check failed`
+	if out, ok := interpretRunResult("", missingApkErr); ok {
+		t.Errorf("missing-apk failure (empty stdout, error on stderr) should not be treated as success, got %q", out)
+	}
+
+	// Observed case: stdout gets a success-looking "Sent ... MB" line, but
+	// a later deploy stage fails and only stderr carries the real error.
+	const partialStdout = "Standard Install: Sent 11.35 MB (1 APK)"
+	const laterStageErr = "Installation failed. Code: UNKNOWN. Details: ..."
+	if out, ok := interpretRunResult(partialStdout, laterStageErr); ok {
+		t.Errorf("stdout with success-looking text but non-empty stderr should not be treated as success, got %q", out)
+	}
+
+	// Ambiguous-activity disambiguation prompt must still fall through
+	// even though it's non-empty stdout with empty stderr.
+	const ambiguous = "Multiple candidates found for type ACTIVITY:\n  - a\n  - b"
+	if out, ok := interpretRunResult(ambiguous, ""); ok {
+		t.Errorf("ambiguous-activity output should not be treated as success, got %q", out)
+	}
+
+	if out, ok := interpretRunResult("", ""); ok {
+		t.Errorf("empty stdout and stderr should not be treated as success, got %q", out)
+	}
+}
+
 func TestSafeRelPath(t *testing.T) {
 	good := map[string]string{
 		"":                          ".",
