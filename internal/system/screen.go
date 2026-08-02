@@ -198,7 +198,7 @@ func (s *ScreenClient) SetOrientation(ctx context.Context, deviceID, orientation
 }
 
 func buildSetOrientationCmd(rot string) string {
-	return "settings put system accelerometer_rotation 0; settings put system user_rotation " + rot
+	return "settings put system accelerometer_rotation 0 && settings put system user_rotation " + rot
 }
 
 // Wake wakes the device (KEYCODE_WAKEUP) and dismisses simple lock screens.

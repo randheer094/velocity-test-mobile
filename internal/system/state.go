@@ -121,7 +121,7 @@ func buildBatterySetCmd(ops []batteryOp) string {
 	for i, op := range ops {
 		cmds[i] = "dumpsys battery set " + op.key + " " + op.val
 	}
-	return strings.Join(cmds, "; ")
+	return strings.Join(cmds, " && ")
 }
 
 // BatteryReset clears every override applied via SetBattery.

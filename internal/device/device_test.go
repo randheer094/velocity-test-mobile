@@ -130,6 +130,29 @@ func TestResolve_RefreshesOnUnknownDeviceID(t *testing.T) {
 	}
 }
 
+func TestResolve_RefreshesOnStaleDeviceState(t *testing.T) {
+	calls := 0
+	r := newTestResolver(func(ctx context.Context) ([]Device, error) {
+		calls++
+		state := "offline"
+		if calls > 1 {
+			state = "device"
+		}
+		return []Device{{Serial: "emulator-5554", State: state}}, nil
+	}, time.Minute)
+
+	d, err := r.Resolve(context.Background(), "emulator-5554")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if d.Serial != "emulator-5554" {
+		t.Errorf("serial = %q", d.Serial)
+	}
+	if calls != 2 {
+		t.Errorf("fetch called %d times, want 2 (initial + refresh-on-stale-state)", calls)
+	}
+}
+
 func TestResolve_FindsKnownDeviceWithoutRefetch(t *testing.T) {
 	calls := 0
 	r := newTestResolver(func(ctx context.Context) ([]Device, error) {

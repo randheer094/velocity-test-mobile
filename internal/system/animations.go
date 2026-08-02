@@ -60,7 +60,7 @@ func buildAnimationsGetCmd() string {
 	for i, k := range animationKeys {
 		parts[i] = "settings get global " + k
 	}
-	return strings.Join(parts, "; ")
+	return strings.Join(parts, " && ")
 }
 
 // Set writes a single scale value (commonly 0 to disable, 1 for default) to
@@ -79,5 +79,5 @@ func buildAnimationsSetCmd(value string) string {
 	for i, k := range animationKeys {
 		parts[i] = "settings put global " + k + " " + value
 	}
-	return strings.Join(parts, "; ")
+	return strings.Join(parts, " && ")
 }

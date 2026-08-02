@@ -188,14 +188,12 @@ func (r *Resolver) Resolve(ctx context.Context, id string) (Device, error) {
 		return Device{}, err
 	}
 	if id != "" {
-		if d, ok := findDevice(devices, id); ok {
-			if d.State != "device" {
-				return Device{}, fmt.Errorf("device %s is in state %q (expected \"device\")", id, d.State)
-			}
+		if d, ok := findDevice(devices, id); ok && d.State == "device" {
 			return d, nil
 		}
 		// The cached list might be stale (e.g. a device was just plugged
-		// in) — refresh once and retry before giving up.
+		// in, or its state just changed) — refresh once and retry before
+		// giving up.
 		devices, err = r.ForceList(ctx)
 		if err != nil {
 			return Device{}, err

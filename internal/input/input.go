@@ -43,7 +43,7 @@ func (c *Client) DoubleTap(ctx context.Context, deviceID string, x, y int) error
 
 func buildDoubleTapCmd(x, y int) string {
 	tap := fmt.Sprintf("input tap %d %d", x, y)
-	return tap + "; " + tap
+	return tap + " && " + tap
 }
 
 // LongPress simulates a press at (x,y) for durationMs milliseconds (1..10000).
@@ -139,9 +139,9 @@ func (c *Client) TapAndPressButton(ctx context.Context, deviceID string, x, y, s
 func buildTapAndPressButtonCmd(x, y, settleMs, code int) string {
 	cmd := fmt.Sprintf("input tap %d %d", x, y)
 	if settleMs > 0 {
-		cmd += "; sleep " + settleSeconds(settleMs)
+		cmd += " && sleep " + settleSeconds(settleMs)
 	}
-	cmd += fmt.Sprintf("; input keyevent %d", code)
+	cmd += fmt.Sprintf(" && input keyevent %d", code)
 	return cmd
 }
 
@@ -167,7 +167,7 @@ func (c *Client) TapAndType(ctx context.Context, deviceID string, x, y, settleMs
 func buildTapAndSettleCmd(x, y, settleMs int) string {
 	cmd := fmt.Sprintf("input tap %d %d", x, y)
 	if settleMs > 0 {
-		cmd += "; sleep " + settleSeconds(settleMs)
+		cmd += " && sleep " + settleSeconds(settleMs)
 	}
 	return cmd
 }
@@ -184,7 +184,7 @@ func buildTapAndTypeASCIICmd(x, y, settleMs int, text string, submit bool) strin
 	if submit {
 		parts = append(parts, "input keyevent 66")
 	}
-	return strings.Join(parts, "; ")
+	return strings.Join(parts, " && ")
 }
 
 // settleSeconds formats a millisecond duration as a `sleep`-compatible

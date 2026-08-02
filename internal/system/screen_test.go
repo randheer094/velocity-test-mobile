@@ -32,7 +32,7 @@ func TestParseWMDensity(t *testing.T) {
 
 func TestBuildSetOrientationCmd(t *testing.T) {
 	got := buildSetOrientationCmd("1")
-	want := "settings put system accelerometer_rotation 0; settings put system user_rotation 1"
+	want := "settings put system accelerometer_rotation 0 && settings put system user_rotation 1"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
