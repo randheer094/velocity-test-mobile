@@ -39,7 +39,7 @@ func TestClamp(t *testing.T) {
 
 func TestBuildTapAndPressButtonCmd(t *testing.T) {
 	got := buildTapAndPressButtonCmd(100, 200, 120, 66)
-	want := "input tap 100 200; sleep 0.120; input keyevent 66"
+	want := "input tap 100 200 && sleep 0.120 && input keyevent 66"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -47,7 +47,7 @@ func TestBuildTapAndPressButtonCmd(t *testing.T) {
 
 func TestBuildTapAndPressButtonCmd_NoSettle(t *testing.T) {
 	got := buildTapAndPressButtonCmd(100, 200, 0, 66)
-	want := "input tap 100 200; input keyevent 66"
+	want := "input tap 100 200 && input keyevent 66"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -62,15 +62,15 @@ func TestBuildTapAndTypeASCIICmd(t *testing.T) {
 		want           string
 	}{
 		{"tap+settle+text+submit", 10, 20, 150, "hello world", true,
-			"input tap 10 20; sleep 0.150; input text 'hello%sworld'; input keyevent 66"},
+			"input tap 10 20 && sleep 0.150 && input text 'hello%sworld' && input keyevent 66"},
 		{"no settle", 10, 20, 0, "hi", false,
-			"input tap 10 20; input text 'hi'"},
+			"input tap 10 20 && input text 'hi'"},
 		{"empty text, submit only", 10, 20, 150, "", true,
-			"input tap 10 20; sleep 0.150; input keyevent 66"},
+			"input tap 10 20 && sleep 0.150 && input keyevent 66"},
 		{"text with single quote is escaped", 10, 20, 0, "it's", false,
-			`input tap 10 20; input text 'it'\''s'`},
+			`input tap 10 20 && input text 'it'\''s'`},
 		{"text with shell metacharacters is quoted, not injected", 10, 20, 0, "a; rm -rf /", false,
-			"input tap 10 20; input text 'a;%srm%s-rf%s/'"},
+			"input tap 10 20 && input text 'a;%srm%s-rf%s/'"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -83,7 +83,7 @@ func TestBuildTapAndTypeASCIICmd(t *testing.T) {
 }
 
 func TestBuildTapAndSettleCmd(t *testing.T) {
-	if got, want := buildTapAndSettleCmd(1, 2, 150), "input tap 1 2; sleep 0.150"; got != want {
+	if got, want := buildTapAndSettleCmd(1, 2, 150), "input tap 1 2 && sleep 0.150"; got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
 	if got, want := buildTapAndSettleCmd(1, 2, 0), "input tap 1 2"; got != want {
@@ -102,7 +102,7 @@ func TestSettleSeconds(t *testing.T) {
 
 func TestBuildDoubleTapCmd(t *testing.T) {
 	got := buildDoubleTapCmd(10, 20)
-	want := "input tap 10 20; input tap 10 20"
+	want := "input tap 10 20 && input tap 10 20"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}

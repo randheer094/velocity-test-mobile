@@ -5,7 +5,7 @@ import "testing"
 func TestBuildBatterySetCmd(t *testing.T) {
 	ops := []batteryOp{{"level", "50"}, {"status", "2"}}
 	got := buildBatterySetCmd(ops)
-	want := "dumpsys battery set level 50; dumpsys battery set status 2"
+	want := "dumpsys battery set level 50 && dumpsys battery set status 2"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
