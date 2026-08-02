@@ -71,6 +71,13 @@ func (o *Orchestrator) TypeText(ctx context.Context, deviceID string, m *matcher
 	if err != nil {
 		return ActionResult{Reason: err.Error()}, err
 	}
+	return o.typeTextElem(ctx, deviceID, elem, text, submit)
+}
+
+// typeTextElem is the no-fetch core of TypeText, operating on an
+// already-matched element. Use this when the caller already holds a fresh
+// snapshot (e.g. ReplaceText, which just cleared the same field).
+func (o *Orchestrator) typeTextElem(ctx context.Context, deviceID string, elem ui.Element, text string, submit bool) (ActionResult, error) {
 	x, y := CenterOf(elem)
 	if !elem.Focused {
 		if err := o.Input.Tap(ctx, deviceID, x, y); err != nil {
@@ -92,10 +99,18 @@ func (o *Orchestrator) TypeText(ctx context.Context, deviceID string, m *matcher
 // ReplaceText — Espresso replaceText() / Compose performTextReplacement.
 // Implementation: click → select-all (Ctrl+A via key event) → delete → type.
 func (o *Orchestrator) ReplaceText(ctx context.Context, deviceID string, m *matcher.Matcher, text string, submit bool) (ActionResult, error) {
-	if err := o.clearTextField(ctx, deviceID, m); err != nil {
+	elem, _, err := o.fetchAndFind(ctx, deviceID, m)
+	if err != nil {
 		return ActionResult{Reason: err.Error()}, err
 	}
-	return o.TypeText(ctx, deviceID, m, text, submit)
+	if err := o.clearTextFieldElem(ctx, deviceID, elem); err != nil {
+		return ActionResult{Element: &elem, Reason: err.Error()}, err
+	}
+	// clearTextFieldElem cannot return successfully without the field ending
+	// up focused (it taps-to-focus as its own precondition), so there's no
+	// need to re-fetch the tree just to re-confirm that.
+	elem.Focused = true
+	return o.typeTextElem(ctx, deviceID, elem, text, submit)
 }
 
 // ClearText — Espresso clearText() / Compose performTextClearance.
@@ -104,25 +119,21 @@ func (o *Orchestrator) ClearText(ctx context.Context, deviceID string, m *matche
 	if err != nil {
 		return ActionResult{Reason: err.Error()}, err
 	}
-	if err := o.clearTextField(ctx, deviceID, m); err != nil {
+	if err := o.clearTextFieldElem(ctx, deviceID, elem); err != nil {
 		return ActionResult{Element: &elem, Reason: err.Error()}, err
 	}
 	x, y := CenterOf(elem)
 	return ActionResult{OK: true, Element: &elem, X: x, Y: y}, nil
 }
 
-// clearTextField focuses the matched field and wipes its text.
+// clearTextFieldElem focuses the matched field and wipes its text.
 //
 // Strategy:
 //  1. If the field isn't focused, tap its centre and wait briefly.
 //  2. Try CTRL+A (select-all) + DEL via `input keycombination` (API 31+).
 //  3. Fall back to MOVE_END followed by repeated DEL — sized by the
 //     current text length plus a margin.
-func (o *Orchestrator) clearTextField(ctx context.Context, deviceID string, m *matcher.Matcher) error {
-	elem, _, err := o.fetchAndFind(ctx, deviceID, m)
-	if err != nil {
-		return err
-	}
+func (o *Orchestrator) clearTextFieldElem(ctx context.Context, deviceID string, elem ui.Element) error {
 	x, y := CenterOf(elem)
 	if !elem.Focused {
 		if err := o.Input.Tap(ctx, deviceID, x, y); err != nil {
@@ -144,18 +155,14 @@ func (o *Orchestrator) clearTextField(ctx context.Context, deviceID string, m *m
 
 	// Fallback: jump to end of line then issue DEL once per existing rune,
 	// plus a small margin in case more text is in the field than was
-	// captured by the accessibility snapshot.
+	// captured by the accessibility snapshot. Batched into as few
+	// subprocess calls as the device's `input` binary allows.
 	_ = o.Input.PressButton(ctx, deviceID, "MOVE_END")
 	count := len([]rune(elem.Text)) + 4
 	if count > 256 {
 		count = 256 // cap to keep latency bounded on huge fields
 	}
-	for i := 0; i < count; i++ {
-		if err := o.Input.PressButton(ctx, deviceID, "DEL"); err != nil {
-			return err
-		}
-	}
-	return nil
+	return o.Input.PressButtonRepeat(ctx, deviceID, "DEL", count)
 }
 
 // Submit — Espresso pressImeActionButton; convenience for "type then ENTER".
@@ -349,11 +356,16 @@ func (o *Orchestrator) SlowSwipeNode(ctx context.Context, deviceID string, m *ma
 // where direction-based SwipeNode isn't enough. Implemented as a single
 // `input swipe` from one centre to the other with a default 600ms duration.
 func (o *Orchestrator) DragNode(ctx context.Context, deviceID string, from, to *matcher.Matcher, durationMs int) (ActionResult, error) {
-	src, _, err := o.fetchAndFind(ctx, deviceID, from)
+	root, err := o.Layout.Tree(ctx, deviceID)
+	if err != nil {
+		err = fmt.Errorf("snapshotting UI: %w", err)
+		return ActionResult{Reason: err.Error()}, err
+	}
+	src, _, err := findInRoot(root, from)
 	if err != nil {
 		return ActionResult{Reason: "from: " + err.Error()}, err
 	}
-	dst, _, err := o.fetchAndFind(ctx, deviceID, to)
+	dst, _, err := findInRoot(root, to)
 	if err != nil {
 		return ActionResult{Element: &src, Reason: "to: " + err.Error()}, err
 	}

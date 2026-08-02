@@ -1,8 +1,20 @@
 package ui
 
 import (
+	"context"
+	"errors"
 	"testing"
+
+	"github.com/randheer094/velocity-test-mobile/internal/androidcli"
 )
+
+func TestTree_RequiresAndroidCLI(t *testing.T) {
+	l := NewLayoutClient(nil, nil)
+	_, err := l.Tree(context.Background(), "")
+	if !errors.Is(err, androidcli.ErrNotInstalled) {
+		t.Errorf("Tree() with nil AndroidCLI = %v, want androidcli.ErrNotInstalled", err)
+	}
+}
 
 func TestParseBoundsString(t *testing.T) {
 	cases := map[string]Bounds{
@@ -22,49 +34,6 @@ func TestParseBoundsString(t *testing.T) {
 	}
 	if _, ok := parseBoundsString("garbage"); ok {
 		t.Error("expected failure for non-bounds string")
-	}
-}
-
-func TestUIAutomatorParse(t *testing.T) {
-	xmlBytes := []byte(`<?xml version="1.0" encoding="UTF-8"?>
-<hierarchy rotation="0">
-  <node class="android.widget.FrameLayout" bounds="[0,0][1080,2400]" enabled="true">
-    <node class="android.widget.TextView" text="Hello" resource-id="com.foo:id/title" bounds="[100,200][500,300]" clickable="true"/>
-    <node class="android.widget.Button" content-desc="Send" bounds="[100,400][500,500]" clickable="true" enabled="true"/>
-    <node class="android.widget.View" bounds="[0,0][0,0]"/>
-  </node>
-</hierarchy>UI hierarchy dumped to: /dev/tty`)
-
-	cleaned := stripDumpTrailer(xmlBytes)
-	h, err := parseUIAutomatorXML(cleaned)
-	if err != nil {
-		t.Fatalf("parse error: %v", err)
-	}
-	root := convertXMLRoot(h)
-	flat := Flatten(root)
-	if len(flat) < 2 {
-		t.Fatalf("flat = %d, want >=2: %+v", len(flat), flat)
-	}
-	var foundTitle, foundButton, foundEmpty bool
-	for _, e := range flat {
-		if e.Text == "Hello" {
-			foundTitle = true
-		}
-		if e.Label == "Send" {
-			foundButton = true
-		}
-		if e.Bounds.Width == 0 && e.Bounds.Height == 0 {
-			foundEmpty = true
-		}
-	}
-	if !foundTitle {
-		t.Error("missing title")
-	}
-	if !foundButton {
-		t.Error("missing button")
-	}
-	if foundEmpty {
-		t.Error("zero-area element should be filtered")
 	}
 }
 

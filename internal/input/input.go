@@ -131,6 +131,49 @@ func (c *Client) PressButton(ctx context.Context, deviceID, name string) error {
 	return err
 }
 
+// PressButtonRepeat sends the named key event `count` times. It tries to
+// batch all repeats into a single `adb shell input keyevent <code>...<code>`
+// invocation (supported by Android's `input` binary), falling back to one
+// subprocess per keyevent if the device rejects multi-arg invocations.
+func (c *Client) PressButtonRepeat(ctx context.Context, deviceID, name string, count int) error {
+	if count <= 0 {
+		return nil
+	}
+	code, err := adb.Keycode(name)
+	if err != nil {
+		return err
+	}
+	codeStr := itoa(code)
+
+	args := make([]string, 0, count+2)
+	args = append(args, "input", "keyevent")
+	for i := 0; i < count; i++ {
+		args = append(args, codeStr)
+	}
+	res, err := c.Adb.ShellArgv(ctx, deviceID, args...)
+	if err != nil {
+		return err
+	}
+	if !batchKeyeventUnsupported(string(res.Stdout), string(res.Stderr)) {
+		return nil
+	}
+	// Device's `input` binary doesn't accept multiple keycodes per call —
+	// fall back to the previous one-subprocess-per-keyevent behavior.
+	for i := 0; i < count; i++ {
+		if _, err := c.Adb.ShellArgv(ctx, deviceID, "input", "keyevent", codeStr); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// batchKeyeventUnsupported reports whether `input keyevent` output indicates
+// the device's `input` binary rejected multiple keycodes in one invocation.
+func batchKeyeventUnsupported(stdout, stderr string) bool {
+	combined := strings.ToLower(stdout + stderr)
+	return strings.Contains(combined, "unknown command") || strings.Contains(combined, "error: invalid")
+}
+
 // PressKeyCombination dispatches `input keycombination` for chord presses
 // (e.g. CTRL+A). Falls back to a clear error if the device is too old.
 func (c *Client) PressKeyCombination(ctx context.Context, deviceID string, names ...string) error {
