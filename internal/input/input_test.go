@@ -1,6 +1,10 @@
 package input
 
-import "testing"
+import (
+	"encoding/base64"
+	"strings"
+	"testing"
+)
 
 func TestIsASCII(t *testing.T) {
 	cases := map[string]bool{
@@ -93,6 +97,29 @@ func TestSettleSeconds(t *testing.T) {
 		if got := settleSeconds(ms); got != want {
 			t.Errorf("settleSeconds(%d) = %q, want %q", ms, got, want)
 		}
+	}
+}
+
+func TestBuildDoubleTapCmd(t *testing.T) {
+	got := buildDoubleTapCmd(10, 20)
+	want := "input tap 10 20; input tap 10 20"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestBuildPasteUnicodeCmd(t *testing.T) {
+	cmd := buildPasteUnicodeCmd("héllo")
+	if !strings.Contains(cmd, "&& input keyevent 279") {
+		t.Errorf("expected `&&`-chained paste keyevent, got %q", cmd)
+	}
+	if !strings.Contains(cmd, "cmd clipboard set-primary --user 0") {
+		t.Errorf("expected clipboard set-primary, got %q", cmd)
+	}
+	// The base64 payload must decode back to the original text.
+	encoded := base64.StdEncoding.EncodeToString([]byte("héllo"))
+	if !strings.Contains(cmd, encoded) {
+		t.Errorf("expected base64 payload %q in command %q", encoded, cmd)
 	}
 }
 

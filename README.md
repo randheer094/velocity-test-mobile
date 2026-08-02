@@ -248,7 +248,7 @@ The codebase is `internal/` packages plus a thin `main.go`:
 
 - `internal/runner` — single subprocess gateway (timeout, byte cap, structured errors)
 - `internal/adb` / `internal/androidcli` — typed CLI wrappers
-- `internal/ui` — layout (UIAutomator + android-CLI JSON), screenshot, pixel diff
+- `internal/ui` — layout (android-CLI JSON), screenshot, pixel diff
 - `internal/matcher` — JSON-friendly recursive selector + `Find` / `FindAll`
 - `internal/testing` — assertions, actions, sync, intent recorder
 - `internal/tools` — MCP tool registrations (matcher-bearing tools use `Server.AddTool` with hand-built JSON Schema for recursion via `$ref`)

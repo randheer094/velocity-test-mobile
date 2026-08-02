@@ -9,7 +9,6 @@ package testing
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -18,15 +17,39 @@ import (
 	"github.com/randheer094/velocity-test-mobile/internal/ui"
 )
 
+// layoutSource is the subset of *ui.LayoutClient this package depends on.
+// Defined here (consumer side) so tests can substitute a fake without a
+// real device — *ui.LayoutClient already satisfies this implicitly.
+type layoutSource interface {
+	Tree(ctx context.Context, deviceID string) (ui.Element, error)
+}
+
+// inputDispatcher is the subset of *input.Client this package depends on.
+// Same rationale as layoutSource — *input.Client already satisfies this.
+type inputDispatcher interface {
+	Tap(ctx context.Context, deviceID string, x, y int) error
+	DoubleTap(ctx context.Context, deviceID string, x, y int) error
+	LongPress(ctx context.Context, deviceID string, x, y, durationMs int) error
+	Drag(ctx context.Context, deviceID string, fromX, fromY, toX, toY, durationMs int) error
+	Swipe(ctx context.Context, deviceID string, dir input.Direction, screenW, screenH int, anchorX, anchorY, distance, durationMs int) error
+	PressButton(ctx context.Context, deviceID, name string) error
+	PressButtonRepeat(ctx context.Context, deviceID, name string, count int) error
+	PressKeyCombination(ctx context.Context, deviceID string, names ...string) error
+	TypeKeys(ctx context.Context, deviceID, text string, submit bool) error
+	TapAndPressButton(ctx context.Context, deviceID string, x, y, settleMs int, name string) error
+	TapAndType(ctx context.Context, deviceID string, x, y, settleMs int, text string, submit bool) error
+}
+
 // Orchestrator wires the layout snapshot source and the input dispatcher
 // together. It is the single dependency of every Tester verb.
 type Orchestrator struct {
-	Layout *ui.LayoutClient
-	Input  *input.Client
+	Layout layoutSource
+	Input  inputDispatcher
 }
 
-// New builds an Orchestrator.
-func New(layout *ui.LayoutClient, in *input.Client) *Orchestrator {
+// New builds an Orchestrator. Callers pass the concrete *ui.LayoutClient and
+// *input.Client; they satisfy layoutSource/inputDispatcher implicitly.
+func New(layout layoutSource, in inputDispatcher) *Orchestrator {
 	return &Orchestrator{Layout: layout, Input: in}
 }
 
@@ -113,5 +136,3 @@ func pollUntil(ctx context.Context, timeoutMs, intervalMs int, check func(contex
 		}
 	}
 }
-
-var _ = errors.New

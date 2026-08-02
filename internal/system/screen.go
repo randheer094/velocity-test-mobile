@@ -8,17 +8,40 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/randheer094/velocity-test-mobile/internal/adb"
 )
 
+// DefaultSizeCacheTTL bounds how long a Get() result is reused per device.
+// Screen size/density is read-mostly (it doesn't change with orientation —
+// `wm size`/`wm density` report the display's physical/override size, not
+// the current rotation), so this avoids two subprocess spawns on every
+// device_get_screen_size call within the TTL window.
+const DefaultSizeCacheTTL = 30 * time.Second
+
 // ScreenClient covers wm size, orientation, wake/sleep.
 type ScreenClient struct {
-	Adb *adb.Client
+	Adb      *adb.Client
+	cacheTTL time.Duration
+
+	cacheMu sync.Mutex
+	cache   map[string]cachedSize
+
+	now   func() time.Time                                         // test seam; nil means time.Now
+	fetch func(ctx context.Context, deviceID string) (Size, error) // test seam; nil means real adb call
+}
+
+type cachedSize struct {
+	size Size
+	at   time.Time
 }
 
 // NewScreenClient constructs a ScreenClient.
-func NewScreenClient(a *adb.Client) *ScreenClient { return &ScreenClient{Adb: a} }
+func NewScreenClient(a *adb.Client) *ScreenClient {
+	return &ScreenClient{Adb: a, cacheTTL: DefaultSizeCacheTTL}
+}
 
 // Size is reported by `wm size`.
 type Size struct {
@@ -27,17 +50,52 @@ type Size struct {
 	Density int `json:"density"`
 }
 
-// Get returns physical screen size and density.
+// Get returns physical screen size and density, fusing `wm size` and
+// `wm density` into a single adb shell call instead of two, and caching the
+// result per device for cacheTTL.
 func (s *ScreenClient) Get(ctx context.Context, deviceID string) (Size, error) {
-	res, err := s.Adb.ShellArgv(ctx, deviceID, "wm", "size")
+	s.cacheMu.Lock()
+	if cached, ok := s.cache[deviceID]; ok && s.nowFunc().Sub(cached.at) < s.cacheTTL {
+		s.cacheMu.Unlock()
+		return cached.size, nil
+	}
+	s.cacheMu.Unlock()
+
+	size, err := s.fetchSize(ctx, deviceID)
 	if err != nil {
 		return Size{}, err
 	}
-	w, h := parseWMSize(string(res.Stdout))
-	d := 0
-	if res2, err := s.Adb.ShellArgv(ctx, deviceID, "wm", "density"); err == nil {
-		d = parseWMDensity(string(res2.Stdout))
+
+	s.cacheMu.Lock()
+	if s.cache == nil {
+		s.cache = make(map[string]cachedSize)
 	}
+	s.cache[deviceID] = cachedSize{size: size, at: s.nowFunc()}
+	s.cacheMu.Unlock()
+	return size, nil
+}
+
+func (s *ScreenClient) nowFunc() time.Time {
+	if s.now != nil {
+		return s.now()
+	}
+	return time.Now()
+}
+
+func (s *ScreenClient) fetchSize(ctx context.Context, deviceID string) (Size, error) {
+	if s.fetch != nil {
+		return s.fetch(ctx, deviceID)
+	}
+	// `wm density` runs first so its exit status can't mask `wm size`'s —
+	// matches the original two-call behavior, where a density failure was
+	// non-fatal (density just came back 0) but a size failure was not.
+	res, err := s.Adb.Shell(ctx, deviceID, "wm density; wm size")
+	if err != nil {
+		return Size{}, err
+	}
+	out := string(res.Stdout)
+	w, h := parseWMSize(out)
+	d := parseWMDensity(out)
 	return Size{Width: w, Height: h, Density: d}, nil
 }
 
@@ -135,13 +193,12 @@ func (s *ScreenClient) SetOrientation(ctx context.Context, deviceID, orientation
 	default:
 		return fmt.Errorf("invalid orientation %q (expected portrait|landscape)", orientation)
 	}
-	if _, err := s.Adb.ShellArgv(ctx, deviceID, "settings", "put", "system", "accelerometer_rotation", "0"); err != nil {
-		return err
-	}
-	if _, err := s.Adb.ShellArgv(ctx, deviceID, "settings", "put", "system", "user_rotation", rot); err != nil {
-		return err
-	}
-	return nil
+	_, err := s.Adb.Shell(ctx, deviceID, buildSetOrientationCmd(rot))
+	return err
+}
+
+func buildSetOrientationCmd(rot string) string {
+	return "settings put system accelerometer_rotation 0; settings put system user_rotation " + rot
 }
 
 // Wake wakes the device (KEYCODE_WAKEUP) and dismisses simple lock screens.
@@ -159,6 +216,3 @@ func (s *ScreenClient) Lock(ctx context.Context, deviceID string) error {
 	_, err := s.Adb.ShellArgv(ctx, deviceID, "input", "keyevent", "223")
 	return err
 }
-
-// Reused by adb package consumers wanting QuoteForShell-style validation.
-var _ = adb.QuoteForShell
