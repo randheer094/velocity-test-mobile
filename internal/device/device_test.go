@@ -47,8 +47,14 @@ func TestParseGetprop(t *testing.T) {
 }
 
 func newTestResolver(fetch func(ctx context.Context) ([]Device, error), ttl time.Duration) *Resolver {
-	r := NewResolver(nil, nil, time.Second, ttl)
+	r := NewResolver(nil, nil, time.Second, ttl, time.Minute)
 	r.fetch = fetch
+	return r
+}
+
+func newTestResolverForProps(fetchProps func(ctx context.Context, deviceID string) (Props, error), ttl time.Duration) *Resolver {
+	r := NewResolver(nil, nil, time.Second, time.Minute, ttl)
+	r.fetchProps = fetchProps
 	return r
 }
 
@@ -154,6 +160,81 @@ func TestList_DoesNotCacheErrors(t *testing.T) {
 		t.Fatal("expected error")
 	}
 	if _, err := r.List(context.Background()); err == nil {
+		t.Fatal("expected error")
+	}
+	if calls != 2 {
+		t.Errorf("fetch called %d times, want 2 (errors must not be cached)", calls)
+	}
+}
+
+func TestGetProps_CachesWithinTTL(t *testing.T) {
+	calls := 0
+	r := newTestResolverForProps(func(ctx context.Context, deviceID string) (Props, error) {
+		calls++
+		return Props{Serial: deviceID, Model: "Pixel"}, nil
+	}, time.Minute)
+
+	if _, err := r.GetProps(context.Background(), "emulator-5554"); err != nil {
+		t.Fatalf("GetProps #1: %v", err)
+	}
+	if _, err := r.GetProps(context.Background(), "emulator-5554"); err != nil {
+		t.Fatalf("GetProps #2: %v", err)
+	}
+	if calls != 1 {
+		t.Errorf("fetch called %d times, want 1", calls)
+	}
+}
+
+func TestGetProps_RefetchesAfterTTL(t *testing.T) {
+	calls := 0
+	now := time.Now()
+	r := newTestResolverForProps(func(ctx context.Context, deviceID string) (Props, error) {
+		calls++
+		return Props{Serial: deviceID}, nil
+	}, 5*time.Millisecond)
+	r.now = func() time.Time { return now }
+
+	if _, err := r.GetProps(context.Background(), "emulator-5554"); err != nil {
+		t.Fatalf("GetProps #1: %v", err)
+	}
+	now = now.Add(10 * time.Millisecond)
+	if _, err := r.GetProps(context.Background(), "emulator-5554"); err != nil {
+		t.Fatalf("GetProps #2: %v", err)
+	}
+	if calls != 2 {
+		t.Errorf("fetch called %d times, want 2", calls)
+	}
+}
+
+func TestGetProps_CachedPerDevice(t *testing.T) {
+	calls := 0
+	r := newTestResolverForProps(func(ctx context.Context, deviceID string) (Props, error) {
+		calls++
+		return Props{Serial: deviceID}, nil
+	}, time.Minute)
+
+	if _, err := r.GetProps(context.Background(), "device-a"); err != nil {
+		t.Fatalf("GetProps device-a: %v", err)
+	}
+	if _, err := r.GetProps(context.Background(), "device-b"); err != nil {
+		t.Fatalf("GetProps device-b: %v", err)
+	}
+	if calls != 2 {
+		t.Errorf("fetch called %d times, want 2 (distinct devices must not share a cache entry)", calls)
+	}
+}
+
+func TestGetProps_DoesNotCacheErrors(t *testing.T) {
+	calls := 0
+	r := newTestResolverForProps(func(ctx context.Context, deviceID string) (Props, error) {
+		calls++
+		return Props{}, context.DeadlineExceeded
+	}, time.Minute)
+
+	if _, err := r.GetProps(context.Background(), "emulator-5554"); err == nil {
+		t.Fatal("expected error")
+	}
+	if _, err := r.GetProps(context.Background(), "emulator-5554"); err == nil {
 		t.Fatal("expected error")
 	}
 	if calls != 2 {
