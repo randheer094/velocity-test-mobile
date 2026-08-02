@@ -31,20 +31,19 @@ func (c *Client) Tap(ctx context.Context, deviceID string, x, y int) error {
 	return err
 }
 
-// DoubleTap sends two taps in rapid succession.
+// DoubleTap sends two taps in rapid succession, fused into a single adb
+// shell call instead of two subprocess spawns.
 func (c *Client) DoubleTap(ctx context.Context, deviceID string, x, y int) error {
 	if x < 0 || y < 0 {
 		return fmt.Errorf("coordinates must be non-negative")
 	}
-	if err := c.tapOnce(ctx, deviceID, x, y); err != nil {
-		return err
-	}
-	return c.tapOnce(ctx, deviceID, x, y)
+	_, err := c.Adb.Shell(ctx, deviceID, buildDoubleTapCmd(x, y))
+	return err
 }
 
-func (c *Client) tapOnce(ctx context.Context, deviceID string, x, y int) error {
-	_, err := c.Adb.ShellArgv(ctx, deviceID, "input", "tap", itoa(x), itoa(y))
-	return err
+func buildDoubleTapCmd(x, y int) string {
+	tap := fmt.Sprintf("input tap %d %d", x, y)
+	return tap + "; " + tap
 }
 
 // LongPress simulates a press at (x,y) for durationMs milliseconds (1..10000).
@@ -298,14 +297,20 @@ func (c *Client) TypeKeys(ctx context.Context, deviceID, text string, submit boo
 // pasteUnicode writes the text into the primary clipboard via the cmd
 // service and presses PASTE. This avoids `input text`'s ASCII-only limit.
 func (c *Client) pasteUnicode(ctx context.Context, deviceID, text string) error {
-	encoded := base64.StdEncoding.EncodeToString([]byte(text))
-	// Try API-29+ path first.
-	cmd := fmt.Sprintf("echo -n %s | base64 -d | cmd clipboard set-primary --user 0", adb.QuoteForShell(encoded))
-	if _, err := c.Adb.Shell(ctx, deviceID, cmd); err == nil {
-		_, err := c.Adb.ShellArgv(ctx, deviceID, "input", "keyevent", "279")
-		return err
+	if _, err := c.Adb.Shell(ctx, deviceID, buildPasteUnicodeCmd(text)); err == nil {
+		return nil
 	}
 	return fmt.Errorf("non-ASCII typing is not supported on this device (cmd clipboard set-primary failed)")
+}
+
+// buildPasteUnicodeCmd builds the API-29+ clipboard-paste command, fused
+// into one shell call with `&&` (not `;`) so the paste keyevent only fires
+// if the clipboard-set actually succeeded — both commands have trustworthy
+// exit codes, unlike `input keycombination` elsewhere in this file, so `&&`
+// is safe here.
+func buildPasteUnicodeCmd(text string) string {
+	encoded := base64.StdEncoding.EncodeToString([]byte(text))
+	return fmt.Sprintf("echo -n %s | base64 -d | cmd clipboard set-primary --user 0 && input keyevent 279", adb.QuoteForShell(encoded))
 }
 
 func isASCII(s string) bool {

@@ -5,8 +5,6 @@ import (
 	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-
-	"github.com/randheer094/velocity-test-mobile/internal/adb"
 )
 
 // RegisterInput exposes only the test-supporting input verbs that don't
@@ -181,5 +179,3 @@ func RegisterInput(s *mcp.Server, d *Deps) {
 		return textResult(fmt.Sprintf("typed %d chars into focused view", len(args.Text)))
 	})
 }
-
-var _ = adb.QuoteForShell // keep adb import used elsewhere if pruned

@@ -34,9 +34,6 @@ func (o *Orchestrator) assertWith(ctx context.Context, deviceID string, m *match
 	return AssertResult{OK: ok, Element: &elem, Matched: len(all), Reason: reason}, nil
 }
 
-// suppress unused-import warning when strings is only conditionally referenced.
-var _ = strings.Contains
-
 // AssertVisible — Espresso isDisplayed / Compose assertIsDisplayed.
 func (o *Orchestrator) AssertVisible(ctx context.Context, deviceID string, m *matcher.Matcher) (AssertResult, error) {
 	return o.assertWith(ctx, deviceID, m, func(e ui.Element) (bool, string) {

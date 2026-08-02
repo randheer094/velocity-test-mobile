@@ -79,11 +79,13 @@ type BatteryState struct {
 // SetBattery applies every set field via `dumpsys battery set ...`. Always
 // pair test-time overrides with `BatteryReset` in cleanup; otherwise the
 // device keeps reporting fake state until reboot.
+// batteryOp is one `dumpsys battery set <key> <val>` field to apply.
+type batteryOp struct{ key, val string }
+
 func (s *StateClient) SetBattery(ctx context.Context, deviceID string, st BatteryState) error {
-	type kv struct{ key, val string }
-	var ops []kv
+	var ops []batteryOp
 	if st.Level >= 0 && st.Level <= 100 {
-		ops = append(ops, kv{"level", fmt.Sprintf("%d", st.Level)})
+		ops = append(ops, batteryOp{"level", fmt.Sprintf("%d", st.Level)})
 	} else if st.Level != -1 {
 		return fmt.Errorf("battery level must be 0..100, got %d", st.Level)
 	}
@@ -91,7 +93,7 @@ func (s *StateClient) SetBattery(ctx context.Context, deviceID string, st Batter
 		if st.Status < 1 || st.Status > 5 {
 			return fmt.Errorf("battery status must be 1..5, got %d", st.Status)
 		}
-		ops = append(ops, kv{"status", fmt.Sprintf("%d", st.Status)})
+		ops = append(ops, batteryOp{"status", fmt.Sprintf("%d", st.Status)})
 	}
 	for _, p := range []struct {
 		field string
@@ -103,17 +105,23 @@ func (s *StateClient) SetBattery(ctx context.Context, deviceID string, st Batter
 		if p.v != 1 && p.v != 2 {
 			return fmt.Errorf("battery %s must be 1 (unplugged) or 2 (plugged), got %d", p.field, p.v)
 		}
-		ops = append(ops, kv{p.field, fmt.Sprintf("%d", p.v-1)})
+		ops = append(ops, batteryOp{p.field, fmt.Sprintf("%d", p.v-1)})
 	}
 	if len(ops) == 0 {
 		return fmt.Errorf("battery_set_state: at least one field must be set")
 	}
-	for _, op := range ops {
-		if _, err := s.Adb.ShellArgv(ctx, deviceID, "dumpsys", "battery", "set", op.key, op.val); err != nil {
-			return err
-		}
+	// Fuse the whole batch into a single adb shell call instead of one
+	// subprocess per field.
+	_, err := s.Adb.Shell(ctx, deviceID, buildBatterySetCmd(ops))
+	return err
+}
+
+func buildBatterySetCmd(ops []batteryOp) string {
+	cmds := make([]string, len(ops))
+	for i, op := range ops {
+		cmds[i] = "dumpsys battery set " + op.key + " " + op.val
 	}
-	return nil
+	return strings.Join(cmds, "; ")
 }
 
 // BatteryReset clears every override applied via SetBattery.

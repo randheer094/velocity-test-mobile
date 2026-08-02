@@ -82,7 +82,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 			var env struct {
 				Device string `json:"device"`
 			}
-			_ = json.Unmarshal(req.Params.Arguments, &env)
+			if err := json.Unmarshal(req.Params.Arguments, &env); err != nil {
+				return errResultDirect(fmt.Errorf("invalid arguments: %w", err)), nil
+			}
 			dev, err := d.resolveDevice(ctx, env.Device)
 			if err != nil {
 				return errResultDirect(err), nil

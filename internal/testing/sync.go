@@ -22,6 +22,24 @@ type WaitResult struct {
 	Reason     string      `json:"reason,omitempty"`
 }
 
+// finishWait builds a WaitResult from a completed pollUntil call. If err is
+// non-nil, the poll loop ended because of a persistent failure (e.g. the
+// device disconnected, or the `android` CLI isn't installed) rather than
+// because the condition genuinely never became true — that's returned as a
+// real Go error so the MCP handler surfaces the actual cause instead of a
+// generic, misleading timeout message. Otherwise ok reflects whether the
+// condition was met, and defaultReason describes a genuine timeout.
+func finishWait(attempts int, waitedMs int64, ok bool, err error, elem *ui.Element, matchedNow int, defaultReason string) (WaitResult, error) {
+	res := WaitResult{Attempts: attempts, WaitedMs: waitedMs, OK: ok, Element: elem, MatchedNow: matchedNow}
+	if err != nil {
+		return res, err
+	}
+	if !ok {
+		res.Reason = defaultReason
+	}
+	return res, nil
+}
+
 // WaitUntilVisible — Compose waitUntilExists(matcher).
 func (o *Orchestrator) WaitUntilVisible(ctx context.Context, deviceID string, m *matcher.Matcher, timeoutMs, intervalMs int) (WaitResult, error) {
 	if m == nil || m.IsEmpty() {
@@ -47,16 +65,7 @@ func (o *Orchestrator) WaitUntilVisible(ctx context.Context, deviceID string, m 
 		}
 		return false, nil
 	})
-	res := WaitResult{
-		Attempts: attempts,
-		WaitedMs: time.Since(start).Milliseconds(),
-		OK:       ok,
-		Element:  lastFound,
-	}
-	if !ok && err == nil {
-		res.Reason = "timed out waiting for element to be visible"
-	}
-	return res, nil
+	return finishWait(attempts, time.Since(start).Milliseconds(), ok, err, lastFound, 0, "timed out waiting for element to be visible")
 }
 
 // WaitUntilNotVisible — Compose waitUntilDoesNotExist (or hidden).
@@ -65,7 +74,7 @@ func (o *Orchestrator) WaitUntilNotVisible(ctx context.Context, deviceID string,
 		return WaitResult{}, matcher.ErrEmptyMatcher
 	}
 	start := time.Now()
-	attempts, ok, _ := pollUntil(ctx, timeoutMs, intervalMs, func(ctx context.Context) (bool, error) {
+	attempts, ok, err := pollUntil(ctx, timeoutMs, intervalMs, func(ctx context.Context) (bool, error) {
 		root, err := o.Layout.Tree(ctx, deviceID)
 		if err != nil {
 			return false, err
@@ -78,11 +87,7 @@ func (o *Orchestrator) WaitUntilNotVisible(ctx context.Context, deviceID string,
 		}
 		return true, nil
 	})
-	res := WaitResult{Attempts: attempts, WaitedMs: time.Since(start).Milliseconds(), OK: ok}
-	if !ok {
-		res.Reason = "element still visible after timeout"
-	}
-	return res, nil
+	return finishWait(attempts, time.Since(start).Milliseconds(), ok, err, nil, 0, "element still visible after timeout")
 }
 
 // WaitUntilText — wait until a node matching m has the given text.
@@ -92,7 +97,7 @@ func (o *Orchestrator) WaitUntilText(ctx context.Context, deviceID string, m *ma
 	}
 	start := time.Now()
 	var lastFound *ui.Element
-	attempts, ok, _ := pollUntil(ctx, timeoutMs, intervalMs, func(ctx context.Context) (bool, error) {
+	attempts, ok, err := pollUntil(ctx, timeoutMs, intervalMs, func(ctx context.Context) (bool, error) {
 		root, err := o.Layout.Tree(ctx, deviceID)
 		if err != nil {
 			return false, err
@@ -107,11 +112,7 @@ func (o *Orchestrator) WaitUntilText(ctx context.Context, deviceID string, m *ma
 		}
 		return false, nil
 	})
-	res := WaitResult{Attempts: attempts, WaitedMs: time.Since(start).Milliseconds(), OK: ok, Element: lastFound}
-	if !ok {
-		res.Reason = fmt.Sprintf("never observed text %q on a matching node", expected)
-	}
-	return res, nil
+	return finishWait(attempts, time.Since(start).Milliseconds(), ok, err, lastFound, 0, fmt.Sprintf("never observed text %q on a matching node", expected))
 }
 
 // WaitUntilAtLeastOneExists — Compose waitUntilAtLeastOneExists. Polls
@@ -125,7 +126,7 @@ func (o *Orchestrator) WaitUntilAtLeastOneExists(ctx context.Context, deviceID s
 	}
 	start := time.Now()
 	lastCount := 0
-	attempts, ok, _ := pollUntil(ctx, timeoutMs, intervalMs, func(ctx context.Context) (bool, error) {
+	attempts, ok, err := pollUntil(ctx, timeoutMs, intervalMs, func(ctx context.Context) (bool, error) {
 		root, err := o.Layout.Tree(ctx, deviceID)
 		if err != nil {
 			return false, err
@@ -134,11 +135,7 @@ func (o *Orchestrator) WaitUntilAtLeastOneExists(ctx context.Context, deviceID s
 		lastCount = len(all)
 		return lastCount >= minCount, nil
 	})
-	res := WaitResult{Attempts: attempts, WaitedMs: time.Since(start).Milliseconds(), OK: ok, MatchedNow: lastCount}
-	if !ok {
-		res.Reason = fmt.Sprintf("only %d matched, need >= %d", lastCount, minCount)
-	}
-	return res, nil
+	return finishWait(attempts, time.Since(start).Milliseconds(), ok, err, nil, lastCount, fmt.Sprintf("only %d matched, need >= %d", lastCount, minCount))
 }
 
 // WaitUntilCount — wait until the matcher resolves to exactly `count` nodes.
@@ -148,7 +145,7 @@ func (o *Orchestrator) WaitUntilCount(ctx context.Context, deviceID string, m *m
 	}
 	start := time.Now()
 	lastCount := 0
-	attempts, ok, _ := pollUntil(ctx, timeoutMs, intervalMs, func(ctx context.Context) (bool, error) {
+	attempts, ok, err := pollUntil(ctx, timeoutMs, intervalMs, func(ctx context.Context) (bool, error) {
 		root, err := o.Layout.Tree(ctx, deviceID)
 		if err != nil {
 			return false, err
@@ -157,11 +154,7 @@ func (o *Orchestrator) WaitUntilCount(ctx context.Context, deviceID string, m *m
 		lastCount = len(all)
 		return lastCount == count, nil
 	})
-	res := WaitResult{Attempts: attempts, WaitedMs: time.Since(start).Milliseconds(), OK: ok, MatchedNow: lastCount}
-	if !ok {
-		res.Reason = fmt.Sprintf("count stuck at %d, want %d", lastCount, count)
-	}
-	return res, nil
+	return finishWait(attempts, time.Since(start).Milliseconds(), ok, err, nil, lastCount, fmt.Sprintf("count stuck at %d, want %d", lastCount, count))
 }
 
 // waitUntilState polls until the matched element satisfies the predicate.
@@ -172,7 +165,7 @@ func (o *Orchestrator) waitUntilState(ctx context.Context, deviceID string, m *m
 	}
 	start := time.Now()
 	var lastFound *ui.Element
-	attempts, ok, _ := pollUntil(ctx, timeoutMs, intervalMs, func(ctx context.Context) (bool, error) {
+	attempts, ok, err := pollUntil(ctx, timeoutMs, intervalMs, func(ctx context.Context) (bool, error) {
 		root, err := o.Layout.Tree(ctx, deviceID)
 		if err != nil {
 			return false, err
@@ -187,11 +180,7 @@ func (o *Orchestrator) waitUntilState(ctx context.Context, deviceID string, m *m
 		}
 		return false, nil
 	})
-	res := WaitResult{Attempts: attempts, WaitedMs: time.Since(start).Milliseconds(), OK: ok, Element: lastFound}
-	if !ok {
-		res.Reason = "timed out waiting for element to be " + label
-	}
-	return res, nil
+	return finishWait(attempts, time.Since(start).Milliseconds(), ok, err, lastFound, 0, "timed out waiting for element to be "+label)
 }
 
 // WaitUntilEnabled — poll until the matcher resolves to an enabled node.
@@ -234,12 +223,14 @@ func (o *Orchestrator) WaitForIdle(ctx context.Context, deviceID string, timeout
 	}
 	start := time.Now()
 	var lastHash string
+	var lastErr error
 	stableSince := time.Time{}
 	attempts := 0
 	deadline := time.Now().Add(time.Duration(timeoutMs) * time.Millisecond)
 	for {
 		attempts++
 		root, err := o.Layout.Tree(ctx, deviceID)
+		lastErr = err
 		if err == nil {
 			h := hashTree(root)
 			if h == lastHash {
@@ -255,7 +246,12 @@ func (o *Orchestrator) WaitForIdle(ctx context.Context, deviceID string, timeout
 			}
 		}
 		if time.Now().After(deadline) {
-			return WaitResult{OK: false, Attempts: attempts, WaitedMs: time.Since(start).Milliseconds(), Reason: "tree did not stabilise within timeout"}, nil
+			res := WaitResult{OK: false, Attempts: attempts, WaitedMs: time.Since(start).Milliseconds()}
+			if lastErr != nil {
+				return res, lastErr
+			}
+			res.Reason = "tree did not stabilise within timeout"
+			return res, nil
 		}
 		select {
 		case <-ctx.Done():
