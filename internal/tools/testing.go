@@ -161,7 +161,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 			Match    *matcher.Matcher `json:"match,omitempty"`
 			MaxDepth int              `json:"maxDepth,omitempty"`
 		}
-		_ = json.Unmarshal(req.Params.Arguments, &args)
+		if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
+			return errResultDirect(fmt.Errorf("invalid arguments: %w", err)), nil
+		}
 		dev, err := d.resolveDevice(ctx, args.Device)
 		if err != nil {
 			return errResultDirect(err), nil
@@ -232,7 +234,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 			var x struct {
 				Percent int `json:"percent"`
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			return o.AssertDisplayingAtLeast(ctx, dev, m, x.Percent)
 		})
 
@@ -250,7 +254,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 			var x struct {
 				Count int `json:"count"`
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			return o.AssertChildCount(ctx, dev, m, x.Count, false)
 		})
 	addMatcherTool("assert_has_minimum_child_count",
@@ -261,7 +267,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 			var x struct {
 				Count int `json:"count"`
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			return o.AssertChildCount(ctx, dev, m, x.Count, true)
 		})
 
@@ -278,7 +286,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 					Dp      int     `json:"dp"`
 					Density float64 `json:"density"`
 				}
-				_ = json.Unmarshal(raw, &x)
+				if err := json.Unmarshal(raw, &x); err != nil {
+					return nil, fmt.Errorf("invalid arguments: %w", err)
+				}
 				return fn(ctx, dev, m, x.Dp, x.Density)
 			})
 	}
@@ -301,7 +311,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 			var x struct {
 				X, Y, TolerancePx int
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			return o.AssertPositionInRoot(ctx, dev, m, x.X, x.Y, x.TolerancePx)
 		})
 
@@ -363,7 +375,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 			var x struct {
 				Expected string `json:"expected"`
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			return o.AssertTextEquals(ctx, dev, m, x.Expected)
 		})
 
@@ -376,7 +390,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 			var x struct {
 				Substring string `json:"substring"`
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			return o.AssertTextContains(ctx, dev, m, x.Substring)
 		})
 
@@ -389,7 +405,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 			var x struct {
 				Expected string `json:"expected"`
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			return o.AssertContentDescriptionEquals(ctx, dev, m, x.Expected)
 		})
 
@@ -402,7 +420,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 			var x struct {
 				Substring string `json:"substring"`
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			return o.AssertContentDescriptionContains(ctx, dev, m, x.Substring)
 		})
 
@@ -415,7 +435,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 			var x struct {
 				Pattern string `json:"pattern"`
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			return o.AssertTextRegex(ctx, dev, m, x.Pattern)
 		})
 
@@ -428,7 +450,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 			var x struct {
 				Expected string `json:"expected"`
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			return o.AssertErrorTextEquals(ctx, dev, m, x.Expected)
 		})
 
@@ -441,7 +465,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 			var x struct {
 				Expected string `json:"expected"`
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			return o.AssertHintEquals(ctx, dev, m, x.Expected)
 		})
 
@@ -454,7 +480,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 			var x struct {
 				ClassSubstring string `json:"class_substring"`
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			return o.AssertInputType(ctx, dev, m, x.ClassSubstring)
 		})
 
@@ -470,7 +498,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 			var x struct {
 				Expected int `json:"expected"`
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			return o.AssertCountEquals(ctx, dev, m, x.Expected)
 		})
 
@@ -531,7 +561,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 			var x struct {
 				DurationMs int `json:"durationMs"`
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			res, _ := o.LongClick(ctx, dev, m, x.DurationMs)
 			return res, nil
 		})
@@ -548,7 +580,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 				Text   string `json:"text"`
 				Submit bool   `json:"submit"`
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			res, _ := o.TypeText(ctx, dev, m, x.Text, x.Submit)
 			return res, nil
 		})
@@ -560,7 +594,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 				Text   string `json:"text"`
 				Submit bool   `json:"submit"`
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			res, _ := o.ReplaceText(ctx, dev, m, x.Text, x.Submit)
 			return res, nil
 		})
@@ -592,7 +628,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 				Direction  string `json:"direction"`
 				DurationMs int    `json:"durationMs"`
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			res, _ := o.SwipeNode(ctx, dev, m, x.Direction, x.DurationMs)
 			return res, nil
 		})
@@ -608,7 +646,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 			var x struct {
 				Direction string `json:"direction"`
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			res, _ := o.SlowSwipeNode(ctx, dev, m, x.Direction)
 			return res, nil
 		})
@@ -626,7 +666,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 				Index     int    `json:"index"`
 				Direction string `json:"direction"`
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			res, _ := o.ScrollToIndex(ctx, dev, m, x.Index, x.Direction)
 			return res, nil
 		})
@@ -646,7 +688,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 				Key              string
 				Ctrl, Shift, Alt bool
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			res, _ := o.PerformKeyPress(ctx, dev, m, x.Key, x.Ctrl, x.Shift, x.Alt)
 			return res, nil
 		})
@@ -767,7 +811,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 				TimeoutMs  int `json:"timeoutMs"`
 				IntervalMs int `json:"intervalMs"`
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			return o.WaitUntilVisible(ctx, dev, m, x.TimeoutMs, x.IntervalMs)
 		})
 	addMatcherTool("wait_until_not_visible",
@@ -778,7 +824,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 				TimeoutMs  int `json:"timeoutMs"`
 				IntervalMs int `json:"intervalMs"`
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			return o.WaitUntilNotVisible(ctx, dev, m, x.TimeoutMs, x.IntervalMs)
 		})
 
@@ -797,7 +845,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 				TimeoutMs  int    `json:"timeoutMs"`
 				IntervalMs int    `json:"intervalMs"`
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			return o.WaitUntilText(ctx, dev, m, x.Expected, x.TimeoutMs, x.IntervalMs)
 		})
 
@@ -816,7 +866,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 				TimeoutMs  int `json:"timeoutMs"`
 				IntervalMs int `json:"intervalMs"`
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			return o.WaitUntilCount(ctx, dev, m, x.Count, x.TimeoutMs, x.IntervalMs)
 		})
 
@@ -835,7 +887,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 				TimeoutMs  int `json:"timeoutMs"`
 				IntervalMs int `json:"intervalMs"`
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			return o.WaitUntilAtLeastOneExists(ctx, dev, m, x.Count, x.TimeoutMs, x.IntervalMs)
 		})
 
@@ -846,7 +900,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 					TimeoutMs  int `json:"timeoutMs"`
 					IntervalMs int `json:"intervalMs"`
 				}
-				_ = json.Unmarshal(raw, &x)
+				if err := json.Unmarshal(raw, &x); err != nil {
+					return nil, fmt.Errorf("invalid arguments: %w", err)
+				}
 				return fn(ctx, dev, m, x.TimeoutMs, x.IntervalMs)
 			})
 	}
@@ -876,7 +932,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 				TimeoutMs    int `json:"timeoutMs"`
 				IdleWindowMs int `json:"idleWindowMs"`
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			return o.WaitForIdle(ctx, dev, x.TimeoutMs, x.IdleWindowMs)
 		})
 
@@ -933,7 +991,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 			var x struct {
 				Package string `json:"package"`
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			if err := intents.Start(ctx, dev, x.Package); err != nil {
 				return nil, err
 			}
@@ -972,7 +1032,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 				Expected int `json:"expected"`
 				testing.IntentMatcher
 			}
-			_ = json.Unmarshal(raw, &x)
+			if err := json.Unmarshal(raw, &x); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			return intents.AssertCount(ctx, dev, x.IntentMatcher, x.Expected)
 		})
 
@@ -989,7 +1051,9 @@ func RegisterTesting(s *mcp.Server, d *Deps) {
 		nil,
 		func(ctx context.Context, dev string, raw json.RawMessage) (any, error) {
 			var im testing.IntentMatcher
-			_ = json.Unmarshal(raw, &im)
+			if err := json.Unmarshal(raw, &im); err != nil {
+				return nil, fmt.Errorf("invalid arguments: %w", err)
+			}
 			return intents.AssertSent(ctx, dev, im)
 		})
 }
